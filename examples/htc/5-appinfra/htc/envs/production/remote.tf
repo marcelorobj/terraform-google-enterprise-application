@@ -25,9 +25,15 @@ locals {
     )
   )
   app_admin_project = data.terraform_remote_state.appfactory.outputs.app-group["htc.htc"].app_admin_project_id
-  gke_cluster_names = data.terraform_remote_state.multitenant.outputs.cluster_names
-  network_name       = data.terraform_remote_state.multitenant.outputs.network_name
-  cluster_regions = data.terraform_remote_state.multitenant.outputs.cluster_regions
+  app_infra_project = data.terraform_remote_state.appfactory.outputs.app-group["htc.htc"].app_infra_project_ids[local.env]
+  cloudbuild_sa = data.terraform_remote_state.appfactory.outputs.app-group["htc.htc"].app_cloudbuild_workspace_cloudbuild_sa_email
+
+  gke_cluster_names = data.terraform_remote_state.multitenant[local.env].outputs.cluster_names
+  network_name       = data.terraform_remote_state.multitenant[local.env].outputs.network_names
+  cluster_regions = data.terraform_remote_state.multitenant[local.env].outputs.cluster_regions
+  network_project_id = data.terraform_remote_state.multitenant[local.env].outputs.network_project_id
+  cluster_project_id = data.terraform_remote_state.multitenant[local.env].outputs.cluster_project_id
+  cluster_project_number = data.terraform_remote_state.multitenant[local.env].outputs.cluster_project_number
 }
 
 data "terraform_remote_state" "multitenant" {

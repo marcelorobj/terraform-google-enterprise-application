@@ -15,7 +15,7 @@
 # Helper for fetching credentials for Kubernetes
 output "get_credentials" {
   description = "Command for gcloud get credentials"
-  value       = "gcloud container clusters get-credentials --project ${var.project_id} --location ${var.region} ${var.cluster_name}"
+  value       = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.project_id} --location ${var.region} "
 }
 # Cluster
 output "cluster_url" {

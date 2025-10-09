@@ -36,12 +36,7 @@ locals {
 
   cluster_config = "${var.cluster_name}-${var.region}-${var.project_id}"
 
-  kubeconfig_script = join("\n", [
-    "export KUBECONFIG=\"${path.root}/generated/kubeconfig_${var.cluster_name}.yaml\"",
-    "echo KUBECONFIG=$KUBECONFIG",
-    "gcloud container clusters get-credentials ${var.cluster_name} --project=${var.project_id} --region=${var.region}",
-    "mv -f \"${path.root}/generated/kubeconfig_${var.cluster_name}.yaml.${var.cluster_name}\" \"${path.root}/generated/kubeconfig_${var.cluster_name}.yaml\"",
-  ])
+  kubeconfig_script = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.project_id} --location ${var.region}"
 
 
   # Test output
@@ -132,32 +127,28 @@ resource "null_resource" "cluster_init" {
     command = <<-EOT
     ${local.kubeconfig_script}
 
-    mkdir -p ${path.root}/generated/k8s_configs
-    echo "${each.value}" > ${path.root}/generated/k8s_configs/${each.key}
+    mkdir -p ./generated/k8s_configs
+    echo "${each.value}" ./generated/k8s_configs/${each.key}
 
-    kubectl apply -f - <<EOF
+    kubectl apply --server-side -f - <<EOF
     ${each.value}
     EOF
     EOT
   }
 }
 
-resource "null_resource" "apply_custom_compute_class" {
-  triggers = {
-    cluster_change = local.cluster_config
-    kustomize_change = sha512(join("", [
-      for f in fileset(".", "${path.module}/../../../kubernetes/compute-classes/**") :
-      filesha512(f)
-    ]))
-  }
+module "kubectl" {
+  source  = "terraform-google-modules/gcloud/google//modules/kubectl-fleet-wrapper"
+  version = "~> 3.5"
 
-  provisioner "local-exec" {
-    when    = create
-    command = <<-EOT
-    ${local.kubeconfig_script}
-    kubectl apply -k "${path.module}/../../../kubernetes/compute-classes/"
-    EOT
-  }
+  skip_download = true
+
+  membership_project_id   = var.project_id
+  membership_name         = var.cluster_name
+  membership_location     = var.region
+  kubectl_create_command  = "kubectl apply --validate=false --v=6 -k ${path.module}/../../../kubernetes/compute-classes/"
+  kubectl_destroy_command = "timeout 300s kubectl delete -f ${path.module}/../../../kubernetes/compute-classes/ || exit 0"
+
 }
 
 resource "null_resource" "apply_custom_priority_class" {
@@ -173,7 +164,7 @@ resource "null_resource" "apply_custom_priority_class" {
     when    = create
     command = <<-EOT
     ${local.kubeconfig_script}
-    kubectl apply -k "${path.module}/../../../kubernetes/priority-classes/"
+    kubectl apply --server-side -k "${path.module}/../../../kubernetes/priority-classes/"
     EOT
   }
 }
@@ -202,10 +193,10 @@ resource "null_resource" "job_init" {
     command = <<-EOT
     ${local.kubeconfig_script}
 
-    mkdir -p ${path.root}/generated/k8s_configs/job_init
-    echo "${each.value}" > ${path.root}/generated/k8s_configs/job_init/${each.key}.yaml
+    mkdir -p ${path.module}/../../../generated/k8s_configs/job_init
+    echo "${each.value}" > ${path.module}/../../../generated/k8s_configs/job_init/${each.key}.yaml
 
-    kubectl apply -f - <<EOF
+    kubectl apply --server-side -f - <<EOF
     ${each.value}
     EOF
 
@@ -253,9 +244,9 @@ resource "null_resource" "parallelstore_init" {
     when    = create
     command = <<-EOT
     ${local.kubeconfig_script}
-    mkdir -p ${path.root}/generated/k8s_configs/parallelstore_init
-    echo "${self.triggers.template}" > ${path.root}/generated/k8s_configs/parallelstore_init/${each.key}
-    kubectl apply -f - <<EOF
+    mkdir -p ${path.module}/../../../generated/k8s_configs/parallelstore_init
+    echo "${self.triggers.template}" > ${path.module}/../../../generated/k8s_configs/parallelstore_init/${each.key}
+    kubectl apply --server-side -f - <<EOF
     ${self.triggers.template}
     EOF
     EOT
@@ -291,9 +282,9 @@ resource "null_resource" "parallelstore_job_init" {
     when    = create
     command = <<-EOT
     ${local.kubeconfig_script}
-    mkdir -p ${path.root}/generated/k8s_configs/parallelstore_job_init
-    echo "${each.value}" > ${path.root}/generated/k8s_configs/parallelstore_job_init/${each.key}.yaml
-    kubectl apply -f - <<EOF
+    mkdir -p ${path.module}/../../../generated/k8s_configs/parallelstore_job_init
+    echo "${each.value}" > ${path.module}/../../../generated/k8s_configs/parallelstore_job_init/${each.key}.yaml
+    kubectl apply --server-side -f - <<EOF
     ${each.value}
     EOF
 

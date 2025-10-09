@@ -29,6 +29,7 @@ module "enabled_google_apis" {
 resource "google_project_iam_member" "team_roles" {
   for_each = toset([
     "roles/storage.objectUser",
+    "roles/storage.objectViewer",
     "roles/pubsub.publisher",
     "roles/pubsub.viewer",
     "roles/pubsub.subscriber"

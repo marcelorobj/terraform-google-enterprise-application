@@ -16,76 +16,110 @@
 # Project and Regional Configuration
 #-----------------------------------------------------
 
-variable "environment_names" {}
+variable "region" {
+  description = "CI/CD region"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "buckets_force_destroy" {
+  description = "When deleting the bucket for storing CICD artifacts, this boolean option will delete all contained objects. If false, Terraform will fail to delete buckets which contain objects."
+  type        = bool
+  default     = false
+}
 
 variable "remote_state_bucket" {
   description = "Backend bucket to load Terraform Remote State Data from previous steps."
   type        = string
 }
 
-variable "project_id" {
-  description = "The GCP project ID where resources will be created."
-  type        = string
-  default     = "YOUR_PROJECT_ID"
-
-  # Validation to ensure the project_id is set
-  validation {
-    condition     = var.project_id != "YOUR_PROJECT_ID"
-    error_message = "The 'project_id' variable must be set in terraform.tfvars or on the command line."
-  }
-}
-
-variable "regions" {
-  description = "List of regions where GKE clusters should be created. Used for multi-region deployments."
+variable "environment_names" {
+  description = "A list of environment names."
   type        = list(string)
-  default     = ["us-central1"]
+}
+
+variable "cloudbuildv2_repository_config" {
+  description = <<-EOT
+  Configuration for integrating repositories with Cloud Build v2:
+    - repo_type: Specifies the type of repository. Supported types are 'GITHUBv2', 'GITLABv2', and 'CSR'.
+    - repositories: A map of repositories to be created. The key must match the exact name of the repository. Each repository is defined by:
+        - repository_name: The name of the repository.
+        - repository_url: The URL of the repository.
+    - github_secret_id: (Optional) The personal access token for GitHub authentication.
+    - github_app_id_secret_id: (Optional) The application ID for a GitHub App used for authentication.
+    - gitlab_read_authorizer_credential_secret_id: (Optional) The read authorizer credential for GitLab access.
+    - gitlab_authorizer_credential_secret_id: (Optional) The authorizer credential for GitLab access.
+    - gitlab_webhook_secret_id: (Optional) The secret ID for the GitLab WebHook.
+    - gitlab_enterprise_host_uri: (Optional) The URI of the GitLab Enterprise host this connection is for. If not specified, the default value is https://gitlab.com.
+    - gitlab_enterprise_service_directory: (Optional) Configuration for using Service Directory to privately connect to a GitLab Enterprise server. This should only be set if the GitLab Enterprise server is hosted on-premises and not reachable by public internet. If this field is left empty, calls to the GitLab Enterprise server will be made over the public internet. Format: projects/{project}/locations/{location}/namespaces/{namespace}/services/{service}.
+    - gitlab_enterprise_ca_certificate: (Optional) SSL certificate to use for requests to GitLab Enterprise.
+  Note: When using GITLABv2, specify `gitlab_read_authorizer_credential` and `gitlab_authorizer_credential` and `gitlab_webhook_secret_id`.
+  Note: When using GITHUBv2, specify `github_pat` and `github_app_id`.
+  Note: If 'cloudbuildv2_repository_config' variable is not configured, CSR (Cloud Source Repositories) will be used by default.
+  EOT
+  type = object({
+    repo_type = string # Supported values are: GITHUBv2, GITLABv2 and CSR
+    # repositories to be created
+    repositories = map(
+      object({
+        repository_name = string
+        repository_url  = string
+      })
+    )
+    # Credential Config for each repository type
+    github_secret_id                            = optional(string)
+    github_app_id_secret_id                     = optional(string)
+    gitlab_read_authorizer_credential_secret_id = optional(string)
+    gitlab_authorizer_credential_secret_id      = optional(string)
+    gitlab_webhook_secret_id                    = optional(string)
+    gitlab_enterprise_host_uri                  = optional(string)
+    gitlab_enterprise_service_directory         = optional(string)
+    gitlab_enterprise_ca_certificate            = optional(string)
+  })
 
   validation {
-    condition     = length(var.regions) <= 4
-    error_message = "Maximum 4 regions supported"
+    condition = (
+      var.cloudbuildv2_repository_config.repo_type == "GITHUBv2" ? (
+        var.cloudbuildv2_repository_config.github_secret_id != null &&
+        var.cloudbuildv2_repository_config.github_app_id_secret_id != null &&
+        var.cloudbuildv2_repository_config.gitlab_read_authorizer_credential_secret_id == null &&
+        var.cloudbuildv2_repository_config.gitlab_authorizer_credential_secret_id == null &&
+        var.cloudbuildv2_repository_config.gitlab_webhook_secret_id == null
+        ) : var.cloudbuildv2_repository_config.repo_type == "GITLABv2" ? (
+        var.cloudbuildv2_repository_config.github_secret_id == null &&
+        var.cloudbuildv2_repository_config.github_app_id_secret_id == null &&
+        var.cloudbuildv2_repository_config.gitlab_read_authorizer_credential_secret_id != null &&
+        var.cloudbuildv2_repository_config.gitlab_authorizer_credential_secret_id != null &&
+        var.cloudbuildv2_repository_config.gitlab_webhook_secret_id != null
+      ) : var.cloudbuildv2_repository_config.repo_type == "CSR" ? true : false
+    )
+    error_message = "You must specify a valid repo_type ('GITHUBv2', 'GITLABv2', or 'CSR'). For 'GITHUBv2', all 'github_' prefixed variables must be defined and no 'gitlab_' prefixed variables should be defined. For 'GITLABv2', all 'gitlab_' prefixed variables must be defined and no 'github_' prefixed variables should be defined."
   }
+
 }
 
-variable "clusters_per_region" {
-  description = "Map of regions to number of clusters to create in each (maximum 4 per region)"
-  type        = map(number)
-  default     = { "us-central1" = 1 }
-
-  validation {
-    condition     = alltrue([for count in values(var.clusters_per_region) : count <= 4])
-    error_message = "Maximum 4 clusters per region allowed"
-  }
-}
-
-#-----------------------------------------------------
-# Deployment Options
-#-----------------------------------------------------
-
-variable "cloudrun_enabled" {
-  description = "Enable Cloud Run deployment alongside GKE"
-  type        = bool
-  default     = true
-}
-
-variable "ui_image_enabled" {
-  description = "Enable or disable the building of the UI image"
-  type        = bool
-  default     = false
-}
-
-#-----------------------------------------------------
-# Output Configuration
-#-----------------------------------------------------
-
-variable "scripts_output" {
-  description = "Output directory for testing scripts"
+variable "access_level_name" {
+  description = "(VPC-SC) Access Level full name. When providing this variable, additional identities will be added to the access level, these are required to work within an enforced VPC-SC Perimeter."
   type        = string
-  default     = "./generated"
+  default     = null
 }
 
-#-----------------------------------------------------
-# PubSub Configuration
-#-----------------------------------------------------
+variable "logging_bucket" {
+  description = "Bucket to store logging."
+  type        = string
+  default     = null
+}
+
+variable "bucket_kms_key" {
+  description = "KMS Key id to be used to encrypt bucket."
+  type        = string
+  default     = null
+}
+
+variable "attestation_kms_key" {
+  type        = string
+  description = "The KMS Key ID to be used by attestor."
+}
 
 variable "pubsub_exactly_once" {
   description = "Enable Pub/Sub exactly once subscriptions"
@@ -93,43 +127,17 @@ variable "pubsub_exactly_once" {
   default     = true
 }
 
-# variable "request_topic" {
-#   description = "Request topic for tasks"
-#   type        = string
-#   default     = "request"
-# }
+variable "cloudrun_enabled" {
+  description = "Enable Cloud Run deployment alongside GKE"
+  type        = bool
+  default     = true
+}
 
-# variable "request_subscription" {
-#   description = "Request subscription for tasks"
-#   type        = string
-#   default     = "request_sub"
-# }
-
-# variable "response_topic" {
-#   description = "Response topic for tasks"
-#   type        = string
-#   default     = "response"
-# }
-
-# variable "response_subscription" {
-#   description = "Response subscription for tasks"
-#   type        = string
-#   default     = "response_sub"
-# }
-
-#-----------------------------------------------------
-# BigQuery Configuration
-#-----------------------------------------------------
-
-# variable "dataset_id" {
-#   description = "BigQuery dataset in the project to create the tables"
-#   type        = string
-#   default     = "pubsub_msgs"
-# }
-
-#-----------------------------------------------------
-# Quota Configuration
-#-----------------------------------------------------
+variable "hsn_bucket" {
+  description = "Enable hierarchical namespace GCS buckets"
+  type        = bool
+  default     = false
+}
 
 variable "additional_quota_enabled" {
   description = "Enable quota requests for additional resources"
@@ -143,289 +151,71 @@ variable "quota_contact_email" {
   default     = ""
 }
 
-#-----------------------------------------------------
-# GKE Cluster Configuration
-#-----------------------------------------------------
-
-variable "gke_standard_cluster_name" {
-  description = "Base name for GKE clusters"
+variable "scripts_output" {
+  description = "Output directory for testing scripts"
   type        = string
-  default     = "gke-risk-research"
+  default     = "./generated"
 }
 
-variable "node_machine_type_ondemand" {
-  description = "Machine type for on-demand node pools"
+variable "ui_image_enabled" {
+  description = "Enable or disable the building of the UI image"
+  type        = bool
+  default     = false
+}
+
+variable "storage_ip_range" {
   type        = string
-  default     = "e2-standard-2"
-}
-
-variable "node_machine_type_spot" {
-  description = "Machine type for spot node pools"
-  type        = string
-  default     = "e2-standard-2"
-}
-
-variable "min_nodes_ondemand" {
-  description = "Minimum number of on-demand nodes"
-  type        = number
-  default     = 0
-}
-
-variable "max_nodes_ondemand" {
-  description = "Maximum number of on-demand nodes"
-  type        = number
-  default     = 1
-}
-
-variable "min_nodes_spot" {
-  description = "Minimum number of spot nodes"
-  type        = number
-  default     = 0
-}
-
-variable "max_nodes_spot" {
-  description = "Maximum number of spot nodes"
-  type        = number
-  default     = 1
-}
-
-# variable "scaled_control_plane" {
-#   description = "Deploy a larger initial nodepool to ensure larger control plane nodes are provisioned"
-#   type        = bool
-#   default     = false
-# }
-
-# variable "cluster_max_cpus" {
-#   description = "Maximum CPU cores in cluster autoscaling resource limits"
-#   type        = number
-#   default     = 10000
-# }
-
-# variable "cluster_max_memory" {
-#   description = "Maximum memory (in GB) in cluster autoscaling resource limits"
-#   type        = number
-#   default     = 80000
-# }
-
-#-----------------------------------------------------
-# Storage Configuration
-#-----------------------------------------------------
-
-variable "storage_type" {
-  description = "The type of storage system to deploy (PARALLELSTORE, LUSTRE, or null for none)"
-  type        = string
-  default     = null
-
-  # validation {
-  #   condition     = var.storage_type == null || contains(["PARALLELSTORE", "LUSTRE"], var.storage_type)
-  #   error_message = "The storage_type must be null, PARALLELSTORE, or LUSTRE."
-  # }
-}
-
-variable "storage_capacity_gib" {
-  description = "Capacity in GiB for the selected storage system (Parallelstore or Lustre)"
-  type        = number
-  default     = null
-
-  # validation {
-  #   condition     = var.storage_capacity_gib > 0
-  #   error_message = "Storage capacity must be a positive number or null."
-  # }
+  description = "IP range for Storage peering, in CIDR notation"
+  default     = "172.16.0.0/16"
 }
 
 variable "storage_locations" {
-  description = "Map of region to location (zone) for storage instances e.g. {\"us-central1\" = \"us-central1-a\"}"
+  description = "Map of region to location (zone) for storage instances e.g. {\"us-central1\" = \"us-central1-a\"}. If not specified, the first zone in each region will be used."
   type        = map(string)
   default     = {}
 }
 
-variable "deployment_type" {
-  description = "Parallelstore Instance deployment type (SCRATCH or PERSISTENT)"
+variable "storage_type" {
   type        = string
-  default     = "SCRATCH"
+  description = "The type of storage system to deploy. Set to PARALLELSTORE or LUSTRE to enable storage creation. If null (default), no storage system will be deployed by these module blocks."
+  default     = null
+  nullable    = true
 
   validation {
-    condition     = contains(["SCRATCH", "PERSISTENT"], var.deployment_type)
-    error_message = "deployment_type must be either SCRATCH or PERSISTENT."
+    # Allow null OR one of the specified types
+    condition     = var.storage_type == null ? true : contains(["PARALLELSTORE", "LUSTRE"], var.storage_type)
+    error_message = "The storage_type must be null, PARALLELSTORE, or LUSTRE."
   }
 }
 
-#-----------------------------------------------------
-# Lustre Configuration
-#-----------------------------------------------------
-
-variable "lustre_filesystem" {
-  description = "The name of the Lustre filesystem"
-  type        = string
-  default     = "lustre-fs"
-}
-
-variable "lustre_gke_support_enabled" {
-  description = "Enable GKE support for Lustre instance"
-  type        = bool
-  default     = true
-}
-
-#-----------------------------------------------------
-# Storage Options
-#-----------------------------------------------------
-
-variable "hsn_bucket" {
-  description = "Enable hierarchical namespace GCS buckets"
-  type        = bool
-  default     = false
-}
-
-#-----------------------------------------------------
-# Network Configuration
-#-----------------------------------------------------
-
-variable "vpc_name" {
-  description = "Name of the VPC network to create"
-  type        = string
-  default     = "research-vpc"
-}
-
-variable "storage_ip_range" {
-  description = "IP range for Storage peering, in CIDR notation"
-  type        = string
-  default     = "172.16.0.0/16"
-}
-
-#-----------------------------------------------------
-# Artifact Registry Configuration
-#-----------------------------------------------------
-
-variable "artifact_registry_name" {
-  description = "Name of the Artifact Registry repository"
-  type        = string
-  default     = "research-images"
-}
-
-#-----------------------------------------------------
-# Security Configuration
-#-----------------------------------------------------
-
-variable "enable_workload_identity" {
-  description = "Enable Workload Identity for GKE clusters"
-  type        = bool
-  default     = true
-}
-
-#-----------------------------------------------------
-# CSI Drivers Configuration
-#-----------------------------------------------------
-
-variable "enable_csi_parallelstore" {
-  description = "Enable the Parallelstore CSI Driver"
-  type        = bool
-  default     = true
-}
-
-# variable "enable_csi_filestore" {
-#   description = "Enable the Filestore CSI Driver"
-#   type        = bool
-#   default     = false
-# }
-
-variable "enable_csi_gcs_fuse" {
-  description = "Enable the GCS Fuse CSI Driver"
-  type        = bool
-  default     = true
-}
-
-#-----------------------------------------------------
-# VPC-SC
-#-----------------------------------------------------
-
-variable "service_perimeter_name" {
-  description = "(VPC-SC) Service perimeter name. The created projects in this step will be assigned to this perimeter."
-  type        = string
+variable "storage_capacity_gib" {
+  type        = number
+  description = "Capacity in GiB for the selected storage system (Parallelstore or Lustre)."
   default     = null
+  nullable    = true
+  # validation {
+  #   condition = var.storage_capacity_gib == null ? true : (
+  #     (var.storage_type != "LUSTRE" || (
+  #       var.storage_capacity_gib >= 18000 &&
+  #       var.storage_capacity_gib <= 936000 &&
+  #       var.storage_capacity_gib % 9000 == 0
+  #     )) &&
+  #     (var.storage_type != "PARALLELSTORE" || (
+  #       var.storage_capacity_gib >= 12000 &&
+  #       var.storage_capacity_gib <= 100000 &&
+  #       var.storage_capacity_gib % 4000 == 0
+  #     )) &&
+  #     (var.storage_type == "LUSTRE" || var.storage_type == "PARALLELSTORE")
+  #   )
+  #   error_message = "Storage capacity must be a positive number."
+  # }
 }
 
-variable "service_perimeter_mode" {
-  description = "(VPC-SC) Service perimeter mode: ENFORCE, DRY_RUN."
-  type        = string
-  default     = "DRY_RUN"
 
-  validation {
-    condition     = contains(["ENFORCE", "DRY_RUN"], var.service_perimeter_mode)
-    error_message = "The service_perimeter_mode value must be one of: ENFORCE, DRY_RUN."
-  }
-}
 
-variable "access_level_name" {
-  description = "(VPC-SC) Access Level full name. When providing this variable, additional identities will be added to the access level, these are required to work within an enforced VPC-SC Perimeter."
-  type        = string
-  default     = null
-}
-
-variable "infra_project" {
-  description = "The infrastructure project where resources will be managed."
-  type        = string
-}
-
-variable "cluster_project" {
-  description = "The project that hosts the Kubernetes cluster."
-  type        = string
-}
-
-variable "region" {
-  description = "The region where the cloud resources will be deployed."
-  type        = string
-  default     = "us-central1"
-}
-
-variable "bucket_force_destroy" {
-  description = "When deleting a bucket, this boolean option will delete all contained objects. If false, Terraform will fail to delete buckets which contain objects."
-  type        = bool
-  default     = false
-}
-
-variable "cluster_project_number" {
-  description = "The numerical identifier for the cluster project."
-  type        = string
-}
-
-variable "env" {
-  description = "The environment in which resources are deployed (e.g., development, nonproduction, production)."
-  type        = string
-}
-
-variable "cluster_service_accounts" {
-  description = "A map of service accounts emails associated with the Kubernetes cluster, these will be granted access to created Docker images."
-  type        = map(any)
-}
-
-variable "team" {
-  description = "Environment Team, must be the same as the fleet scope team"
-  type        = string
-}
-
-variable "workerpool_id" {
-  description = <<-EOT
-    Specifies the Cloud Build Worker Pool that will be utilized for triggers created in this step.
-
-    The expected format is:
-    `projects/PROJECT/locations/LOCATION/workerPools/POOL_NAME`.
-
-    If you are using worker pools from a different project, ensure that you grant the
-    `roles/cloudbuild.workerPoolUser` role on the workerpool project to the Cloud Build Service Agent and the Cloud Build Service Account of the trigger project:
-    `service-PROJECT_NUMBER@gcp-sa-cloudbuild.iam.gserviceaccount.com`, `PROJECT_NUMBER@cloudbuild.gserviceaccount.com`
-  EOT
-  type        = string
-  default     = ""
-}
-
-variable "logging_bucket" {
-  description = "Bucket to store logging."
-  type        = string
-  default     = null
-}
-
-variable "bucket_kms_key" {
-  description = "KMS Key id to be used to encrypt bucket."
-  type        = string
-  default     = null
+variable "envs" {
+  description = "Environments"
+  type = map(object({
+    network_self_link  = string
+  }))
 }

@@ -16,11 +16,14 @@
 #
 # Mandatory configuration
 #
-
-# Project ID where resources will be deployed
-variable "project_id" {
+variable "cluster_project_id" {
   type        = string
-  description = "The GCP project ID where resources will be created."
+  description = "The GCP project ID where the GKE cluster is created."
+}
+
+variable "infra_project_id" {
+  type        = string
+  description = "The GCP project ID where the pubsub is created."
 }
 
 # Region where the build and artifact repository is
@@ -181,3 +184,7 @@ variable "parallelstore_capacity_gib" {
   # }
 }
 
+variable "namespace" {
+  type        = string
+  description = "The environment's fleet namespace'"
+}

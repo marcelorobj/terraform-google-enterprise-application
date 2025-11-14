@@ -114,47 +114,31 @@ links into the Console.
 |------|-------------|------|---------|:--------:|
 | access\_level\_name | (VPC-SC) Access Level full name. When providing this variable, additional identities will be added to the access level, these are required to work within an enforced VPC-SC Perimeter. | `string` | `null` | no |
 | additional\_quota\_enabled | Enable quota requests for additional resources | `bool` | `false` | no |
-| artifact\_registry\_name | Name of the Artifact Registry repository | `string` | `"research-images"` | no |
+| attestation\_kms\_key | The KMS Key ID to be used by attestor. | `string` | n/a | yes |
+| bucket\_kms\_key | KMS Key id to be used to encrypt bucket. | `string` | `null` | no |
+| buckets\_force\_destroy | When deleting the bucket for storing CICD artifacts, this boolean option will delete all contained objects. If false, Terraform will fail to delete buckets which contain objects. | `bool` | `false` | no |
+| cloudbuildv2\_repository\_config | Configuration for integrating repositories with Cloud Build v2:<br>  - repo\_type: Specifies the type of repository. Supported types are 'GITHUBv2', 'GITLABv2', and 'CSR'.<br>  - repositories: A map of repositories to be created. The key must match the exact name of the repository. Each repository is defined by:<br>      - repository\_name: The name of the repository.<br>      - repository\_url: The URL of the repository.<br>  - github\_secret\_id: (Optional) The personal access token for GitHub authentication.<br>  - github\_app\_id\_secret\_id: (Optional) The application ID for a GitHub App used for authentication.<br>  - gitlab\_read\_authorizer\_credential\_secret\_id: (Optional) The read authorizer credential for GitLab access.<br>  - gitlab\_authorizer\_credential\_secret\_id: (Optional) The authorizer credential for GitLab access.<br>  - gitlab\_webhook\_secret\_id: (Optional) The secret ID for the GitLab WebHook.<br>  - gitlab\_enterprise\_host\_uri: (Optional) The URI of the GitLab Enterprise host this connection is for. If not specified, the default value is https://gitlab.com.<br>  - gitlab\_enterprise\_service\_directory: (Optional) Configuration for using Service Directory to privately connect to a GitLab Enterprise server. This should only be set if the GitLab Enterprise server is hosted on-premises and not reachable by public internet. If this field is left empty, calls to the GitLab Enterprise server will be made over the public internet. Format: projects/{project}/locations/{location}/namespaces/{namespace}/services/{service}.<br>  - gitlab\_enterprise\_ca\_certificate: (Optional) SSL certificate to use for requests to GitLab Enterprise.<br>Note: When using GITLABv2, specify `gitlab_read_authorizer_credential` and `gitlab_authorizer_credential` and `gitlab_webhook_secret_id`.<br>Note: When using GITHUBv2, specify `github_pat` and `github_app_id`.<br>Note: If 'cloudbuildv2\_repository\_config' variable is not configured, CSR (Cloud Source Repositories) will be used by default. | <pre>object({<br>    repo_type = string # Supported values are: GITHUBv2, GITLABv2 and CSR<br>    # repositories to be created<br>    repositories = map(<br>      object({<br>        repository_name = string<br>        repository_url  = string<br>      })<br>    )<br>    # Credential Config for each repository type<br>    github_secret_id                            = optional(string)<br>    github_app_id_secret_id                     = optional(string)<br>    gitlab_read_authorizer_credential_secret_id = optional(string)<br>    gitlab_authorizer_credential_secret_id      = optional(string)<br>    gitlab_webhook_secret_id                    = optional(string)<br>    gitlab_enterprise_host_uri                  = optional(string)<br>    gitlab_enterprise_service_directory         = optional(string)<br>    gitlab_enterprise_ca_certificate            = optional(string)<br>  })</pre> | n/a | yes |
 | cloudrun\_enabled | Enable Cloud Run deployment alongside GKE | `bool` | `true` | no |
-| cluster\_service\_account | Service Account ID for GKE clusters | `string` | `"gke-risk-research-cluster-sa"` | no |
-| clusters\_per\_region | Map of regions to number of clusters to create in each (maximum 4 per region) | `map(number)` | <pre>{<br>  "us-central1": 1<br>}</pre> | no |
-| deployment\_type | Parallelstore Instance deployment type (SCRATCH or PERSISTENT) | `string` | `"SCRATCH"` | no |
-| enable\_csi\_gcs\_fuse | Enable the GCS Fuse CSI Driver | `bool` | `true` | no |
-| enable\_csi\_parallelstore | Enable the Parallelstore CSI Driver | `bool` | `true` | no |
-| enable\_workload\_identity | Enable Workload Identity for GKE clusters | `bool` | `true` | no |
-| gke\_standard\_cluster\_name | Base name for GKE clusters | `string` | `"gke-risk-research"` | no |
+| environment\_names | A list of environment names. | `list(string)` | n/a | yes |
+| envs | Environments | <pre>map(object({<br>    network_self_link = string<br>  }))</pre> | n/a | yes |
 | hsn\_bucket | Enable hierarchical namespace GCS buckets | `bool` | `false` | no |
-| lustre\_filesystem | The name of the Lustre filesystem | `string` | `"lustre-fs"` | no |
-| lustre\_gke\_support\_enabled | Enable GKE support for Lustre instance | `bool` | `true` | no |
-| max\_nodes\_ondemand | Maximum number of on-demand nodes | `number` | `1` | no |
-| max\_nodes\_spot | Maximum number of spot nodes | `number` | `1` | no |
-| min\_nodes\_ondemand | Minimum number of on-demand nodes | `number` | `0` | no |
-| min\_nodes\_spot | Minimum number of spot nodes | `number` | `0` | no |
-| node\_machine\_type\_ondemand | Machine type for on-demand node pools | `string` | `"e2-standard-2"` | no |
-| node\_machine\_type\_spot | Machine type for spot node pools | `string` | `"e2-standard-2"` | no |
-| project\_id | The GCP project ID where resources will be created. | `string` | `"YOUR_PROJECT_ID"` | no |
+| logging\_bucket | Bucket to store logging. | `string` | `null` | no |
 | pubsub\_exactly\_once | Enable Pub/Sub exactly once subscriptions | `bool` | `true` | no |
 | quota\_contact\_email | Contact email for quota requests | `string` | `""` | no |
-| regions | List of regions where GKE clusters should be created. Used for multi-region deployments. | `list(string)` | <pre>[<br>  "us-central1"<br>]</pre> | no |
+| region | CI/CD region | `string` | `"us-central1"` | no |
+| remote\_state\_bucket | Backend bucket to load Terraform Remote State Data from previous steps. | `string` | n/a | yes |
 | scripts\_output | Output directory for testing scripts | `string` | `"./generated"` | no |
-| service\_perimeter\_mode | (VPC-SC) Service perimeter mode: ENFORCE, DRY\_RUN. | `string` | `"DRY_RUN"` | no |
-| service\_perimeter\_name | (VPC-SC) Service perimeter name. The created projects in this step will be assigned to this perimeter. | `string` | `null` | no |
-| storage\_capacity\_gib | Capacity in GiB for the selected storage system (Parallelstore or Lustre) | `number` | `null` | no |
+| storage\_capacity\_gib | Capacity in GiB for the selected storage system (Parallelstore or Lustre). | `number` | `null` | no |
 | storage\_ip\_range | IP range for Storage peering, in CIDR notation | `string` | `"172.16.0.0/16"` | no |
-| storage\_locations | Map of region to location (zone) for storage instances e.g. {"us-central1" = "us-central1-a"} | `map(string)` | `{}` | no |
-| storage\_type | The type of storage system to deploy (PARALLELSTORE, LUSTRE, or null for none) | `string` | `null` | no |
+| storage\_locations | Map of region to location (zone) for storage instances e.g. {"us-central1" = "us-central1-a"}. If not specified, the first zone in each region will be used. | `map(string)` | `{}` | no |
+| storage\_type | The type of storage system to deploy. Set to PARALLELSTORE or LUSTRE to enable storage creation. If null (default), no storage system will be deployed by these module blocks. | `string` | `null` | no |
+| team | Example's team name | `string` | n/a | yes |
 | ui\_image\_enabled | Enable or disable the building of the UI image | `bool` | `false` | no |
-| vpc\_name | Name of the VPC network to create | `string` | `"research-vpc"` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| cluster\_service\_account | The service account used by GKE clusters |
-| get\_credentials | Get Credentials command |
-| local\_test\_scripts | Test scripts for running loadtest |
-| lookerstudio\_create\_dashboard\_url | Looker Studio template dashboard |
-| monitoring\_dashboard\_url | Monitoring dashboard |
-| ui\_image | Image for the UI |
+| test\_scripts | Test configuration shell scripts |
 
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

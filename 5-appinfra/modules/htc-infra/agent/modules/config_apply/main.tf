@@ -34,9 +34,9 @@ locals {
     template_path = "${path.module}/k8s/parallelstore/${fname}"
   } }
 
-  cluster_config = "${var.cluster_name}-${var.region}-${var.project_id}"
+  cluster_config = "${var.cluster_name}-${var.region}-${var.cluster_project_id}"
 
-  kubeconfig_script = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.project_id} --location ${var.region}"
+  kubeconfig_script = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.cluster_project_id} --location ${var.region}"
 
 
   # Test output
@@ -48,6 +48,8 @@ locals {
         parallel          = cfg.parallel,
         workload_args     = var.workload_args,
         workload_image    = var.workload_image,
+        namespace         = var.namespace,
+        pubsub_project_id = var.infra_project_id,
         agent_image       = var.agent_image,
         workload_endpoint = var.workload_grpc_endpoint,
         workload_request_sub = (cfg.parallel > 0 ?
@@ -62,10 +64,12 @@ locals {
     for id, cfg in var.test_configs :
     id => templatefile(
       "${path.module}/k8s/controller_job.templ", {
-        parallel       = 1,
-        job_name       = "${replace(id, "/[_\\.]/", "-")}-controller",
-        container_name = "controller",
-        image          = var.agent_image,
+        parallel          = 1,
+        job_name          = "${replace(id, "/[_\\.]/", "-")}-controller",
+        container_name    = "controller",
+        namespace         = var.namespace,
+        image             = var.agent_image,
+        pubsub_project_id = var.infra_project_id,
         args = [
           "test", "pubsub",
           "--logJSON",
@@ -85,13 +89,15 @@ locals {
     for id, cfg in var.test_configs :
     id => templatefile(
       "${path.module}/k8s/test_config.sh.templ", {
+        namespace         = var.namespace,
+        pubsub_project_id = var.infra_project_id,
         parallel          = cfg.parallel,
         job_config        = local.test_job_template[id],
         controller_config = local.test_controller_template[id],
-        project_id        = var.project_id,
+        project_id        = var.cluster_project_id,
         region            = var.region,
         cluster_name      = var.cluster_name,
-        KUBECONFIG        = "/tmp/kubeconfig_${var.cluster_name}-${var.project_id}.yaml"
+        KUBECONFIG        = "/tmp/kubeconfig_${var.cluster_name}-${var.cluster_project_id}.yaml"
     })
   }
 }
@@ -103,23 +109,35 @@ resource "null_resource" "cluster_init" {
     { "volume_yaml" = templatefile(
       "${path.module}/k8s/volume.yaml.templ", {
         gcs_storage_data = var.gcs_bucket
+        namespace        = var.namespace
       }),
       "hpa_yaml" = templatefile(
         "${path.module}/k8s/hpa.yaml.templ", {
-          name                = "gke-hpa",
-          workload_image      = var.workload_image,
-          workload_args       = var.workload_args,
-          workload_endpoint   = var.workload_grpc_endpoint,
-          agent_image         = var.agent_image,
+          name                = "gke-hpa"
+          namespace           = var.namespace
+          pubsub_project_id   = var.infra_project_id
+          workload_image      = var.workload_image
+          workload_args       = var.workload_args
+          workload_endpoint   = var.workload_grpc_endpoint
+          agent_image         = var.agent_image
           gke_hpa_request_sub = var.pubsub_hpa_request
           gke_hpa_response    = var.gke_hpa_response
       }),
+      "adapter_new_resource_model_yaml" = templatefile(
+        "${path.module}/k8s/adapter_new_resource_model.yaml.templ", {
+          namespace = var.namespace
+      }),
+      "volume_claim_yaml" = templatefile(
+        "${path.module}/k8s/volume_claim.yaml.templ", {
+          namespace = var.namespace
+      })
     }
   )
 
   triggers = {
     template       = each.value
     cluster_change = local.cluster_config
+    test           = true
   }
 
   provisioner "local-exec" {
@@ -130,25 +148,29 @@ resource "null_resource" "cluster_init" {
     mkdir -p ./generated/k8s_configs
     echo "${each.value}" ./generated/k8s_configs/${each.key}
 
-    kubectl apply --server-side -f - <<EOF
+    kubectl apply -f - <<EOF
     ${each.value}
     EOF
     EOT
   }
 }
 
-module "kubectl" {
-  source  = "terraform-google-modules/gcloud/google//modules/kubectl-fleet-wrapper"
-  version = "~> 3.5"
+resource "null_resource" "apply_custom_compute_class" {
+  triggers = {
+    cluster_change = local.cluster_config
+    kustomize_change = sha512(join("", [
+      for f in fileset(".", "${path.module}/../../../kubernetes/compute-classes/**") :
+      filesha512(f)
+    ]))
+  }
 
-  skip_download = true
-
-  membership_project_id   = var.project_id
-  membership_name         = var.cluster_name
-  membership_location     = var.region
-  kubectl_create_command  = "kubectl apply --validate=false --v=6 -k ${path.module}/../../../kubernetes/compute-classes/"
-  kubectl_destroy_command = "timeout 300s kubectl delete -f ${path.module}/../../../kubernetes/compute-classes/ || exit 0"
-
+  provisioner "local-exec" {
+    when    = create
+    command = <<-EOT
+    ${local.kubeconfig_script}
+    kubectl apply -k "${path.module}/../../../kubernetes/compute-classes/"
+    EOT
+  }
 }
 
 resource "null_resource" "apply_custom_priority_class" {
@@ -164,7 +186,7 @@ resource "null_resource" "apply_custom_priority_class" {
     when    = create
     command = <<-EOT
     ${local.kubeconfig_script}
-    kubectl apply --server-side -k "${path.module}/../../../kubernetes/priority-classes/"
+    kubectl apply -k "${path.module}/../../../kubernetes/priority-classes/"
     EOT
   }
 }
@@ -174,11 +196,13 @@ resource "null_resource" "job_init" {
   for_each = {
     for id, cfg in local.workload_init_args :
     id => templatefile("${path.module}/k8s/job.templ", {
-      job_name       = replace(id, "/[_\\.]/", "-"),
-      container_name = replace(id, "/[_\\.]/", "-"),
-      parallel       = 1,
-      image          = cfg.image,
-      args           = cfg.args
+      job_name          = replace(id, "/[_\\.]/", "-"),
+      container_name    = replace(id, "/[_\\.]/", "-"),
+      parallel          = 1,
+      image             = cfg.image,
+      args              = cfg.args,
+      namespace         = var.namespace
+      pubsub_project_id = var.infra_project_id
     })
   }
 
@@ -196,23 +220,9 @@ resource "null_resource" "job_init" {
     mkdir -p ${path.module}/../../../generated/k8s_configs/job_init
     echo "${each.value}" > ${path.module}/../../../generated/k8s_configs/job_init/${each.key}.yaml
 
-    kubectl apply --server-side -f - <<EOF
+    kubectl apply --v=6 -f - <<EOF
     ${each.value}
     EOF
-
-    while true; do
-      echo "Checking status of job ${each.key}"
-      if kubectl wait --for=condition=Complete --timeout=0 job/${each.key} 2> /dev/null; then
-        echo "Job ${each.key} successful"
-        exit 0
-      fi
-      if kubectl wait --for=condition=Failed --timeout=0 job/${each.key} 2> /dev/null; then
-        echo "Job ${each.key} failed, logs follow:"
-        kubectl logs -c ${each.key} --tail 10 "jobs/${each.key}"
-        exit 1
-      fi
-      sleep 2
-    done
     EOT
   }
 }
@@ -223,9 +233,11 @@ resource "null_resource" "parallelstore_init" {
 
   triggers = {
     template = templatefile(each.value.template_path, {
+      namespace           = var.namespace
+      pubsub_project_id   = var.infra_project_id
       name                = each.value.name
       access_points       = var.parallelstore_access_points
-      project_id          = var.project_id
+      infra_project_id_id = var.infra_project_id
       vpc                 = var.parallelstore_vpc_name
       location            = var.parallelstore_location
       instance_name       = var.parallelstore_instance_name
@@ -246,7 +258,7 @@ resource "null_resource" "parallelstore_init" {
     ${local.kubeconfig_script}
     mkdir -p ${path.module}/../../../generated/k8s_configs/parallelstore_init
     echo "${self.triggers.template}" > ${path.module}/../../../generated/k8s_configs/parallelstore_init/${each.key}
-    kubectl apply --server-side -f - <<EOF
+    kubectl apply -f - <<EOF
     ${self.triggers.template}
     EOF
     EOT
@@ -258,17 +270,19 @@ resource "null_resource" "parallelstore_job_init" {
   for_each = var.parallelstore_enabled ? {
     for id, cfg in local.workload_init_args :
     id => templatefile("${path.module}/k8s/parallelstore/job.templ", {
-      job_name       = "parallelstore-${replace(id, "/[_\\.]/", "-")}"
-      container_name = replace(id, "/[_\\.]/", "-")
-      access_points  = var.parallelstore_access_points
-      project_id     = var.project_id
-      vpc            = var.parallelstore_vpc_name
-      location       = var.parallelstore_location
-      instance_name  = var.parallelstore_instance_name
-      capacity       = var.parallelstore_capacity_gib
-      parallel       = 1
-      image          = cfg.image
-      args           = cfg.args
+      job_name           = "parallelstore-${replace(id, "/[_\\.]/", "-")}"
+      container_name     = replace(id, "/[_\\.]/", "-")
+      access_points      = var.parallelstore_access_points
+      cluster_project_id = var.cluster_project_id
+      vpc                = var.parallelstore_vpc_name
+      location           = var.parallelstore_location
+      instance_name      = var.parallelstore_instance_name
+      capacity           = var.parallelstore_capacity_gib
+      namespace          = var.namespace
+      pubsub_project_id  = var.infra_project_id
+      parallel           = 1
+      image              = cfg.image
+      args               = cfg.args
     })
   } : {}
 
@@ -284,23 +298,8 @@ resource "null_resource" "parallelstore_job_init" {
     ${local.kubeconfig_script}
     mkdir -p ${path.module}/../../../generated/k8s_configs/parallelstore_job_init
     echo "${each.value}" > ${path.module}/../../../generated/k8s_configs/parallelstore_job_init/${each.key}.yaml
-    kubectl apply --server-side -f - <<EOF
+    kubectl apply -f - <<EOF
     ${each.value}
-    EOF
-
-    while true; do
-      echo "Checking status of job parallelstore-${replace(each.key, "/[_\\.]/", "-")}"
-      if kubectl wait --for=condition=Complete --timeout=0 job/parallelstore-${replace(each.key, "/[_\\.]/", "-")} 2> /dev/null; then
-        echo "Job parallelstore-${replace(each.key, "/[_\\.]/", "-")} successful"
-        exit 0
-      fi
-      if kubectl wait --for=condition=Failed --timeout=0 job/parallelstore-${replace(each.key, "/[_\\.]/", "-")} 2> /dev/null; then
-        echo "Job parallelstore-${replace(each.key, "/[_\\.]/", "-")} failed, logs follow:"
-        kubectl logs -c ${replace(each.key, "/[_\\.]/", "-")} --tail 10 "jobs/parallelstore-${replace(each.key, "/[_\\.]/", "-")}"
-        exit 1
-      fi
-      sleep 2
-    done
     EOT
   }
 }

@@ -15,12 +15,12 @@
 # Helper for fetching credentials for Kubernetes
 output "get_credentials" {
   description = "Command for gcloud get credentials"
-  value       = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.project_id} --location ${var.region} "
+  value       = "gcloud container fleet memberships get-credentials ${var.cluster_name} --project ${var.cluster_project_id} --location ${var.region} "
 }
 # Cluster
 output "cluster_url" {
   description = "Cluster url"
-  value       = "https://console.cloud.google.com/kubernetes/workload/overview?project=${var.project_id}&pageState=(%22savedViews%22:(%22n%22:%5B%22default%22%5D,%22c%22:%5B%22gke%2F${var.region}%2F${var.cluster_name}%22%5D))"
+  value       = "https://console.cloud.google.com/kubernetes/workload/overview?project=${var.cluster_project_id}&pageState=(%22savedViews%22:(%22n%22:%5B%22default%22%5D,%22c%22:%5B%22gke%2F${var.region}%2F${var.cluster_name}%22%5D))"
 }
 
 # Test scripts (shell scripts)

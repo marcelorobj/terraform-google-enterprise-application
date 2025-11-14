@@ -15,7 +15,12 @@
 # Image for building
 output "status" {
   description = "Container build status information including image URLs, tags, and build metadata for all containers built by Cloud Build"
-  value       = local.container_status
+  value = {
+    for container, status in local.container_status :
+    container => merge(status, {
+      "image_url" = data.google_artifact_registry_docker_image.final_image[container].self_link
+    })
+  }
 
   depends_on = [
     null_resource.run_cloud_build

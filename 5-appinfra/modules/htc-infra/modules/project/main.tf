@@ -23,6 +23,14 @@ resource "google_project_service" "artifactregistry_googleapis_com" {
   service                    = "artifactregistry.googleapis.com"
 }
 
+resource "google_project_service" "logging_googleapis_com" {
+  disable_dependent_services = false
+  disable_on_destroy         = false
+  project                    = data.google_project.environment.project_id
+  service                    = "logging.googleapis.com"
+}
+
+
 # resource "google_project_service" "anthos_googleapis_com" {
 #   disable_dependent_services = false
 #   disable_on_destroy         = false

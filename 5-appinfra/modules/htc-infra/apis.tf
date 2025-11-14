@@ -22,20 +22,37 @@ module "enabled_google_apis" {
   activate_apis = [
     "bigquery.googleapis.com",
     "parallelstore.googleapis.com",
-    "container.googleapis.com"
+    "container.googleapis.com",
+    "logging.googleapis.com"
   ]
 }
 
-resource "google_project_iam_member" "team_roles" {
+resource "google_project_iam_member" "team_roles_infra_project" {
   for_each = toset([
     "roles/storage.objectUser",
     "roles/storage.objectViewer",
     "roles/pubsub.publisher",
     "roles/pubsub.viewer",
-    "roles/pubsub.subscriber"
+    "roles/pubsub.subscriber",
+    "roles/monitoring.viewer"
   ])
 
   project = var.infra_project
+  role    = each.value
+  member  = "principalSet://iam.googleapis.com/projects/${var.cluster_project_number}/locations/global/workloadIdentityPools/${var.cluster_project_id}.svc.id.goog/namespace/${local.namespace}"
+}
+
+resource "google_project_iam_member" "team_roles_cluster_project" {
+  for_each = toset([
+    "roles/storage.objectUser",
+    "roles/storage.objectViewer",
+    "roles/pubsub.publisher",
+    "roles/pubsub.viewer",
+    "roles/pubsub.subscriber",
+    "roles/monitoring.viewer"
+  ])
+
+  project = var.cluster_project_id
   role    = each.value
   member  = "principalSet://iam.googleapis.com/projects/${var.cluster_project_number}/locations/global/workloadIdentityPools/${var.cluster_project_id}.svc.id.goog/namespace/${local.namespace}"
 }

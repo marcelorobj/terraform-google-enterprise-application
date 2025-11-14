@@ -47,11 +47,14 @@ type GoogleConfig struct {
 
 func (cfg *GoogleConfig) Initialize(cmd *cobra.Command) {
 
-	// Set defaults for project
 	credentials, err := google.FindDefaultCredentials(context.Background())
-	if err == nil {
+	// Set defaults for project
+	if envProjectId := os.Getenv("PUBSUB_PROJECT_ID"); envProjectId != "" {
+		cfg.ProjectID = envProjectId
+	} else if err == nil {
 		cfg.ProjectID = credentials.ProjectID
 	}
+
 	cfg.enableOpenTelemetry = true
 
 	// Fetch hostname (or use Metadata instance if not found)

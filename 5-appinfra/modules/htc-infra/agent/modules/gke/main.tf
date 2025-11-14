@@ -96,12 +96,14 @@ resource "google_storage_bucket" "gcs_storage_data" {
 
 # Apply Resource to each GKE cluster
 module "config_apply" {
-  for_each     = { for idx, cluster in local.clusters : idx => cluster }
-  source       = "../config_apply"
-  project_id   = var.cluster_project_id
-  region       = each.value.location
-  cluster_name = each.value.name
-  agent_image  = var.agent_image
+  for_each           = { for idx, cluster in local.clusters : idx => cluster }
+  source             = "../config_apply"
+  cluster_project_id = var.cluster_project_id
+  infra_project_id   = var.project_id
+  region             = each.value.location
+  cluster_name       = each.value.name
+  agent_image        = var.agent_image
+  namespace          = var.namespace
   # Workload options
   workload_image         = var.workload_image
   workload_args          = var.workload_args

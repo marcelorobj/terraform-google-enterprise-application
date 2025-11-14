@@ -47,7 +47,7 @@ output "first_test_script" {
 output "cluster_urls" {
   description = "Cluster urls"
   value = {
-    for idx, cluster in local.clusters:
+    for idx, cluster in local.clusters :
     cluster.name => "https://console.cloud.google.com/kubernetes/workload/overview?project=${var.project_id}&pageState=(%22savedViews%22:(%22n%22:%5B%22default%22%5D,%22c%22:%5B%22gke%2F${cluster.location}%2F${cluster.name}%22%5D))"
   }
 }

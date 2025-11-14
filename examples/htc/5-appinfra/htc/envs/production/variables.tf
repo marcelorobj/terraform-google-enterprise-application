@@ -151,6 +151,11 @@ variable "quota_contact_email" {
   default     = ""
 }
 
+variable "team" {
+  description = "Example's team name"
+  type        = string
+}
+
 variable "scripts_output" {
   description = "Output directory for testing scripts"
   type        = string
@@ -216,6 +221,6 @@ variable "storage_capacity_gib" {
 variable "envs" {
   description = "Environments"
   type = map(object({
-    network_self_link  = string
+    network_self_link = string
   }))
 }

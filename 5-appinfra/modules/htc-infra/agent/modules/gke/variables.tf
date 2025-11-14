@@ -36,7 +36,7 @@ variable "regions" {
 
 variable "gke_cluster_names" {
   description = "List of GKE cluster configurations containing cluster name and region"
-  type = list(string)
+  type        = list(string)
 }
 
 # Enable hierarchical namespace GCS buckets
@@ -168,4 +168,9 @@ variable "vpc_name" {
 variable "env" {
   type        = string
   description = "The environment to prepare (ex. development)"
+}
+
+variable "namespace" {
+  type        = string
+  description = "The environment's fleet namespace'"
 }

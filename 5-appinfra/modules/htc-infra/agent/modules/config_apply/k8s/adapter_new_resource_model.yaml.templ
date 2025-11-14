@@ -21,7 +21,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -34,7 +34,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -48,13 +48,13 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: custom-metrics-resource-reader
-  namespace: custom-metrics
+  namespace: ${namespace}
 rules:
 - apiGroups:
   - ""
@@ -78,13 +78,13 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
   labels:
     run: custom-metrics-stackdriver-adapter
     k8s-app: custom-metrics-stackdriver-adapter
@@ -128,7 +128,7 @@ metadata:
     kubernetes.io/cluster-service: 'true'
     kubernetes.io/name: Adapter
   name: custom-metrics-stackdriver-adapter
-  namespace: custom-metrics
+  namespace: ${namespace}
 spec:
   ports:
   - port: 443
@@ -150,7 +150,7 @@ spec:
   versionPriority: 100
   service:
     name: custom-metrics-stackdriver-adapter
-    namespace: custom-metrics
+    namespace: ${namespace}
   version: v1beta1
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -164,7 +164,7 @@ spec:
   versionPriority: 200
   service:
     name: custom-metrics-stackdriver-adapter
-    namespace: custom-metrics
+    namespace: ${namespace}
   version: v1beta2
 ---
 apiVersion: apiregistration.k8s.io/v1
@@ -178,7 +178,7 @@ spec:
   versionPriority: 100
   service:
     name: custom-metrics-stackdriver-adapter
-    namespace: custom-metrics
+    namespace: ${namespace}
   version: v1beta1
 ---
 apiVersion: rbac.authorization.k8s.io/v1

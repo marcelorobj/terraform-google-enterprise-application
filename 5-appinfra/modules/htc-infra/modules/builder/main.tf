@@ -42,38 +42,9 @@ locals {
 }
 
 
-#
-# Enable Cloud Build and fetch the Service Account
-#
-
-resource "google_project_service" "project" {
-  project                    = var.project_id
-  service                    = "cloudbuild.googleapis.com"
-  disable_dependent_services = true
-}
-
 data "google_service_account" "cloudbuild_actor" {
   project    = var.project_id
-  account_id = "cloudbuild-actor"
-}
-
-resource "google_project_iam_member" "logging_member" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${data.google_service_account.cloudbuild_actor.email}"
-}
-
-
-#
-# Grant permissions to the Artifact Repository
-#
-
-resource "google_artifact_registry_repository_iam_member" "repository_member" {
-  project    = var.project_id
-  location   = var.repository_region
-  repository = var.repository_id
-  role       = "roles/artifactregistry.admin"
-  member     = "serviceAccount:${data.google_service_account.cloudbuild_actor.email}"
+  account_id = var.cloudbuild_sa
 }
 
 
@@ -96,12 +67,6 @@ resource "google_storage_bucket" "cloudbuild" {
   force_destroy = true
 }
 
-resource "google_storage_bucket_iam_member" "gcs_cloudbuild_member" {
-  bucket = google_storage_bucket.cloudbuild.id
-  role   = "roles/storage.admin"
-  member = "serviceAccount:${data.google_service_account.cloudbuild_actor.email}"
-}
-
 
 #
 # Launch CloudBuild
@@ -109,13 +74,6 @@ resource "google_storage_bucket_iam_member" "gcs_cloudbuild_member" {
 
 resource "null_resource" "run_cloud_build" {
   for_each = var.containers
-
-  depends_on = [
-    google_storage_bucket_iam_member.gcs_cloudbuild_member,
-    google_artifact_registry_repository_iam_member.repository_member,
-    google_project_service.project,
-    google_storage_bucket_iam_member.gcs_cloudbuild_member,
-  ]
 
   triggers = {
     source_contents_hash = local.container_hash[each.key]
@@ -141,8 +99,8 @@ resource "null_resource" "run_cloud_build" {
       --region ${var.region} \
       --gcs-source-staging-dir gs://${google_storage_bucket.cloudbuild.id}/source/${each.key} \
       --gcs-log-dir gs://${google_storage_bucket.cloudbuild.id}/logs/${each.key} \
-      --service-account=${data.google_service_account.cloudbuild_actor.id} \
       --tag "${local.container_image[each.key]}" \
+      --tag "${local.repository_prefix}/${each.key}:latest" \
       "${each.value.source}"
 
     # Remove config.yaml
@@ -152,4 +110,15 @@ resource "null_resource" "run_cloud_build" {
 
     EOT
   }
+}
+
+data "google_artifact_registry_docker_image" "final_image" {
+  for_each = var.containers
+
+  depends_on = [null_resource.run_cloud_build]
+
+  project       = var.project_id
+  location      = var.repository_region
+  repository_id = var.repository_id
+  image_name    = each.key
 }

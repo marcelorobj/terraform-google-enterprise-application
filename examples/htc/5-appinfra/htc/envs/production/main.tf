@@ -13,10 +13,10 @@
 # limitations under the License.
 
 locals {
-  env = "production"
-  ip_cidr_parts = split("/", var.storage_ip_range)
-  ip_address    = local.ip_cidr_parts[0]
-  prefix_length = local.ip_cidr_parts[1]
+  env              = "production"
+  ip_cidr_parts    = split("/", var.storage_ip_range)
+  ip_address       = local.ip_cidr_parts[0]
+  prefix_length    = local.ip_cidr_parts[1]
   application_name = "htc"
   service_name     = "htc"
   team_name        = "default"
@@ -55,19 +55,18 @@ module "app" {
 module "htc-infra" {
   source = "../../modules/htc-infra"
 
-  gke_cluster_names = local.gke_cluster_names
-  gke_cluster_regions = local.cluster_regions
-  infra_project = local.app_infra_project
-  region = var.region
-  network_self_link = var.envs[local.env].network_self_link
-  network_name = local.network_name
-  team = "mrobj-htc-ui"
-  admin_project = local.app_admin_project
-  depends_on = [ module.app ]
-  network_project_id = local.network_project_id
-  cloudbuild_sa = local.cloudbuild_sa
-  cluster_project_id = local.cluster_project_id
+  service_name           = local.service_name
+  gke_cluster_names      = local.gke_cluster_names
+  gke_cluster_regions    = local.cluster_regions
+  infra_project          = local.app_infra_project
+  region                 = var.region
+  network_self_link      = var.envs[local.env].network_self_link
+  network_name           = local.network_name
+  team                   = var.team
+  admin_project          = local.app_admin_project
+  network_project_id     = local.network_project_id
+  cloudbuild_sa          = local.cloudbuild_sa
+  cluster_project_id     = local.cluster_project_id
   cluster_project_number = local.cluster_project_number
-  env = local.env
+  env                    = local.env
 }
-

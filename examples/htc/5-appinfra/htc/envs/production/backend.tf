@@ -16,7 +16,7 @@
 
 terraform {
   backend "gcs" {
-    bucket = "bkt-htc-htc-admin-8q5j-htc-state"
+    bucket = "UPDATE_ME"
     prefix = "terraform/appinfra/htc/htc/production"
   }
 }

@@ -33,7 +33,7 @@ variable "regions" {
 variable "cloudrun_enabled" {
   description = "Enable Cloud Run deployment alongside GKE"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "ui_image_enabled" {
@@ -334,6 +334,11 @@ variable "admin_project" {
   type        = string
 }
 
+variable "service_name" {
+  type        = string
+  description = "service name (e.g. 'transactionhistory')"
+}
+
 variable "region" {
   description = "The region where the cloud resources will be deployed."
   type        = string
@@ -382,12 +387,12 @@ variable "network_self_link" {
   type        = string
 }
 
-variable "gke_cluster_names"{
+variable "gke_cluster_names" {
   description = "GKE Cluster Name to be used in configurations"
   type        = list(string)
 }
 
-variable "gke_cluster_regions"{
+variable "gke_cluster_regions" {
   description = "GKE Cluster regions to be used in configurations"
   type        = list(string)
 }

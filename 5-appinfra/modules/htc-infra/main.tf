@@ -13,7 +13,7 @@
 # limitations under the License.
 
 locals {
-  namespace                    = "${var.team}-${var.env}"
+  namespace = "${var.team}-${var.env}"
   storage_locations_map = length(var.storage_locations) > 0 ? var.storage_locations : {
     for region in var.regions : region => region
   }
@@ -40,13 +40,8 @@ locals {
 
   local_test_scripts = {
     for key in local.test_script_keys : key => (
-      startswith(key, "run_") ? (
-        var.cloudrun_enabled && length(module.cloudrun) > 0 ?
-        try(module.cloudrun[0].test_scripts[trimprefix(key, "run_")], null) : null
-        ) : (
-        length(module.gke) > 0 ?
-        try(module.gke[var.region].test_scripts[trimprefix(key, "gke_")], null) : null
-      )
+      length(module.gke) > 0 ?
+      try(module.gke[var.region].test_scripts[trimprefix(key, "gke_")], null) : null
     )
   }
 
@@ -64,14 +59,6 @@ locals {
           "name" = "GKE ${config.name}",
           # "script"      = module.gke.first_test_script[config.name],
           "script"      = module.gke.test_scripts_list[0],
-          "parallel"    = config.parallel,
-          "description" = config.description,
-        }
-      ],
-      (!var.cloudrun_enabled || length(module.cloudrun) == 0) ? [] : [
-        for config in local.test_configs : {
-          "name"        = "Cloud Run ${config.name}",
-          "script"      = module.cloudrun[0].test_scripts[config.name],
           "parallel"    = config.parallel,
           "description" = config.description,
         }
@@ -110,10 +97,12 @@ data "google_project" "environment" {
 module "agent" {
   source = "./modules/builder"
 
-  project_id        = var.infra_project
+  project_id        = var.admin_project
+  admin_project_id  = var.admin_project
   region            = var.region
-  repository_region = google_artifact_registry_repository.research-images.location
-  repository_id     = google_artifact_registry_repository.research-images.repository_id
+  repository_region = var.region
+  repository_id     = var.service_name
+  cloudbuild_sa     = var.cloudbuild_sa
 
 
   containers = {
@@ -129,46 +118,19 @@ module "agent" {
   }
 }
 
-
-#-----------------------------------------------------
-# Cloud Run Deployment
-#-----------------------------------------------------
-
-module "cloudrun" {
-  source = "./agent/modules/run"
-  count  = var.cloudrun_enabled ? 1 : 0
-  # var.bq_dataset is defined?
-
-  project_id  = var.infra_project
-  region      = var.region
-  agent_image = module.agent.status["agent"].image
-
-  # Cloud Run specific options
-  bq_dataset = google_bigquery_dataset.main.dataset_id
-
-  # Pub/Sub configuration
-  pubsub_exactly_once = var.pubsub_exactly_once
-
-  # Workload options
-  workload_image         = module.agent.status["loadtest"].image
-  workload_args          = local.workload_args
-  workload_grpc_endpoint = local.workload_grpc_endpoint
-  workload_init_args     = local.workload_init_args
-  test_configs           = local.test_configs_dict
-}
-
 #-----------------------------------------------------
 # GKE Deployment
 #-----------------------------------------------------
 
 module "gke" {
-  source = "./agent/modules/gke"
-  gke_cluster_names = var.gke_cluster_names
-  project_id  = var.infra_project
+  source             = "./agent/modules/gke"
+  gke_cluster_names  = var.gke_cluster_names
+  project_id         = var.infra_project
   cluster_project_id = var.cluster_project_id
-  regions     = ["us-central1"]
-  agent_image = module.agent.status["agent"].image
-  env = var.env
+  regions            = ["us-central1"]
+  agent_image        = module.agent.status["agent"].image_url
+  namespace          = local.namespace
+  env                = var.env
   # GCS specific options
   hsn_bucket = var.hsn_bucket
 
@@ -177,7 +139,7 @@ module "gke" {
 
   # Workload options
   # TODO: Other configuration for the workload - needs to be standardized
-  workload_image         = module.agent.status["loadtest"].image
+  workload_image         = module.agent.status["loadtest"].image_url
   workload_args          = local.workload_args
   workload_grpc_endpoint = local.workload_grpc_endpoint
   workload_init_args     = local.workload_init_args
@@ -234,7 +196,7 @@ resource "google_bigquery_dataset" "main" {
   location                   = var.region
   delete_contents_on_destroy = true
 
-  depends_on = [ module.enabled_google_apis ]
+  depends_on = [module.enabled_google_apis]
 }
 
 #
@@ -255,7 +217,6 @@ resource "google_bigquery_table" "log_stats" {
     use_legacy_sql = false
   }
 }
-# Create an abstraction across Cloud Run Jobs, Cloud Run Services, and K8S pods
 
 # Collect agent statistics
 resource "google_bigquery_table" "agent_stats" {
@@ -306,14 +267,12 @@ module "bigquery_capture" {
   bigquery_table             = "pubsub_messages"
   subscriber_service_account = google_service_account.bq_write_service_account.email
   topics = concat(
-    var.cloudrun_enabled && length(module.cloudrun) > 0 ? module.cloudrun[0].topics : [],
     length(module.gke) > 0 ? module.gke.topics : []
   )
 }
 
 resource "google_pubsub_topic_iam_member" "topic_subscriber" {
   for_each = toset(concat(
-    var.cloudrun_enabled && length(module.cloudrun) > 0 ? module.cloudrun[0].topics : [],
     length(module.gke) > 0 ? module.gke.topics : []
   ))
 
@@ -409,71 +368,9 @@ resource "google_bigquery_table" "messages_summary" {
   ]
 }
 
-
-#-----------------------------------------------------
-# UI Configuration and Test Scripts
-#-----------------------------------------------------
-
-resource "local_file" "test_scripts" {
-  for_each = (var.scripts_output == "") ? {} : {
-    for config in local.test_configs : "gke_${config.name}.sh" => join("\n\n",
-      [for script in module.gke.test_scripts_list : script if strcontains(script, replace(config.name, "_", "-"))]
-    ) if length(module.gke) > 0
-  }
-  filename = "${var.scripts_output}/${each.key}"
-  content  = each.value
-}
-
-resource "local_file" "test_scripts_cloudrun" {
-  for_each = (var.scripts_output == "" || !var.cloudrun_enabled) ? {} : {
-    for k, v in module.cloudrun[0].test_scripts : "run_${k}.sh" => v
-    if length(module.cloudrun) > 0
-  }
-  content  = each.value
-  filename = "${var.scripts_output}/${each.key}"
-}
-
-# Create UI config file
-resource "local_file" "ui_config" {
-  filename = "${var.scripts_output}/config.yaml"
-  content  = local.ui_config_file
-}
-
-# Build the container (Docker file Cloudbuild)
-module "ui_image" {
-  count = var.ui_image_enabled ? 1 : 0
-
-  source = "./modules/builder"
-
-  project_id        = var.infra_project
-  region            = var.region
-  repository_region = google_artifact_registry_repository.research-images.location
-  repository_id     = google_artifact_registry_repository.research-images.repository_id
-
-  containers = {
-    ui = {
-      source      = "${path.module}/ui"
-      config_yaml = local.ui_config_file
-    }
-  }
-  # service_account_name = "ui-cloudbuild"
-
-}
-
-
-resource "google_artifact_registry_repository" "research-images" {
-  project       = var.infra_project
-  location      = var.region
-  repository_id = "htc-repository"
-  description   = "Artifact Registry for htc example"
-  format        = "DOCKER"
-}
-
-
 # Create Parallel Store
-
 module "parallelstore" {
-  for_each = var.storage_type == "PARALLELSTORE" ? local.storage_locations_map : {}
+  for_each        = var.storage_type == "PARALLELSTORE" ? local.storage_locations_map : {}
   source          = "./modules/parallelstore"
   project_id      = var.infra_project
   location        = var.region
@@ -481,5 +378,5 @@ module "parallelstore" {
   capacity_gib    = var.storage_capacity_gib
   deployment_type = var.parallelstore_deployment_type
 
-  depends_on = [ module.enabled_google_apis ]
+  depends_on = [module.enabled_google_apis]
 }

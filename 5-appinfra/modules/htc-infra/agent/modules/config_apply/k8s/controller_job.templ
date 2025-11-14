@@ -16,6 +16,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: ${job_name}
+  namespace: ${namespace}
 spec:
   parallelism: ${parallel}
   ttlSecondsAfterFinished: 30
@@ -49,6 +50,8 @@ spec:
         - name: gcs-data
           mountPath: /data
         env:
+        - name: PUBSUB_PROJECT_ID
+          value: "${pubsub_project_id}"
         - name: K8S_NAMESPACE
           valueFrom:
             fieldRef:

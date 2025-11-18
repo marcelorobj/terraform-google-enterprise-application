@@ -121,102 +121,10 @@ variable "attestation_kms_key" {
   description = "The KMS Key ID to be used by attestor."
 }
 
-variable "pubsub_exactly_once" {
-  description = "Enable Pub/Sub exactly once subscriptions"
-  type        = bool
-  default     = true
-}
-
-variable "cloudrun_enabled" {
-  description = "Enable Cloud Run deployment alongside GKE"
-  type        = bool
-  default     = true
-}
-
-variable "hsn_bucket" {
-  description = "Enable hierarchical namespace GCS buckets"
-  type        = bool
-  default     = false
-}
-
-variable "additional_quota_enabled" {
-  description = "Enable quota requests for additional resources"
-  type        = bool
-  default     = false
-}
-
-variable "quota_contact_email" {
-  description = "Contact email for quota requests"
-  type        = string
-  default     = ""
-}
-
 variable "team" {
   description = "Example's team name"
   type        = string
 }
-
-variable "scripts_output" {
-  description = "Output directory for testing scripts"
-  type        = string
-  default     = "./generated"
-}
-
-variable "ui_image_enabled" {
-  description = "Enable or disable the building of the UI image"
-  type        = bool
-  default     = false
-}
-
-variable "storage_ip_range" {
-  type        = string
-  description = "IP range for Storage peering, in CIDR notation"
-  default     = "172.16.0.0/16"
-}
-
-variable "storage_locations" {
-  description = "Map of region to location (zone) for storage instances e.g. {\"us-central1\" = \"us-central1-a\"}. If not specified, the first zone in each region will be used."
-  type        = map(string)
-  default     = {}
-}
-
-variable "storage_type" {
-  type        = string
-  description = "The type of storage system to deploy. Set to PARALLELSTORE or LUSTRE to enable storage creation. If null (default), no storage system will be deployed by these module blocks."
-  default     = null
-  nullable    = true
-
-  validation {
-    # Allow null OR one of the specified types
-    condition     = var.storage_type == null ? true : contains(["PARALLELSTORE", "LUSTRE"], var.storage_type)
-    error_message = "The storage_type must be null, PARALLELSTORE, or LUSTRE."
-  }
-}
-
-variable "storage_capacity_gib" {
-  type        = number
-  description = "Capacity in GiB for the selected storage system (Parallelstore or Lustre)."
-  default     = null
-  nullable    = true
-  # validation {
-  #   condition = var.storage_capacity_gib == null ? true : (
-  #     (var.storage_type != "LUSTRE" || (
-  #       var.storage_capacity_gib >= 18000 &&
-  #       var.storage_capacity_gib <= 936000 &&
-  #       var.storage_capacity_gib % 9000 == 0
-  #     )) &&
-  #     (var.storage_type != "PARALLELSTORE" || (
-  #       var.storage_capacity_gib >= 12000 &&
-  #       var.storage_capacity_gib <= 100000 &&
-  #       var.storage_capacity_gib % 4000 == 0
-  #     )) &&
-  #     (var.storage_type == "LUSTRE" || var.storage_type == "PARALLELSTORE")
-  #   )
-  #   error_message = "Storage capacity must be a positive number."
-  # }
-}
-
-
 
 variable "envs" {
   description = "Environments"

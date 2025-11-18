@@ -91,8 +91,6 @@ limitations under the License.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| admin\_project\_id | The GCP project ID where resources will be created. | `string` | n/a | yes |
-| cloudbuild\_sa | Admin project's cloud build service account | `string` | n/a | yes |
 | containers | Map of image name to configuration (source) | <pre>map(object({<br>    source      = string<br>    config_yaml = optional(string, "")<br>  }))</pre> | n/a | yes |
 | project\_id | The GCP project ID where resources will be created. | `string` | n/a | yes |
 | region | The region of the build | `string` | n/a | yes |

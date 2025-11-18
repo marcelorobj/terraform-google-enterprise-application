@@ -41,13 +41,6 @@ locals {
   }
 }
 
-
-data "google_service_account" "cloudbuild_actor" {
-  project    = var.project_id
-  account_id = var.cloudbuild_sa
-}
-
-
 #
 # Create Cloud Build staging bucket and grant permissions
 #

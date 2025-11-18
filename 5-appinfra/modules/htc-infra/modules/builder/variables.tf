@@ -18,11 +18,6 @@ variable "project_id" {
   description = "The GCP project ID where resources will be created."
 }
 
-variable "admin_project_id" {
-  type        = string
-  description = "The GCP project ID where resources will be created."
-}
-
 # Region where the build and artifact repository is
 variable "region" {
   type        = string
@@ -33,11 +28,6 @@ variable "repository_region" {
   type        = string
   description = "Artifacte Repository region"
 
-}
-
-variable "cloudbuild_sa" {
-  description = "Admin project's cloud build service account"
-  type        = string
 }
 
 # Repository ID

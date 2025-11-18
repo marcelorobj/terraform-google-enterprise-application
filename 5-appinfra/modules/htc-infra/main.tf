@@ -31,20 +31,6 @@ locals {
     config.name => config
   }
 
-  test_script_keys = flatten([
-    for config in local.test_configs : [
-      "run_${config.name}.sh",
-      "gke_${config.name}.sh"
-    ]
-  ])
-
-  local_test_scripts = {
-    for key in local.test_script_keys : key => (
-      length(module.gke) > 0 ?
-      try(module.gke[var.region].test_scripts[trimprefix(key, "gke_")], null) : null
-    )
-  }
-
   ui_config_file = yamlencode({
     "project_id" : var.infra_project,
     "region" : var.region,
@@ -65,9 +51,6 @@ locals {
       ],
     ),
   })
-  ip_cidr_parts = split("/", var.storage_ip_range)
-  ip_address    = local.ip_cidr_parts[0]
-  prefix_length = local.ip_cidr_parts[1]
   parallelstore_instances = var.storage_type == "PARALLELSTORE" ? {
     for region, instance in module.parallelstore : region => {
       name          = instance.name_short
@@ -86,10 +69,6 @@ locals {
   } : {}
 }
 
-data "google_project" "environment" {
-  project_id = var.infra_project
-}
-
 #-----------------------------------------------------
 # Container Image Building
 #-----------------------------------------------------
@@ -98,12 +77,9 @@ module "agent" {
   source = "./modules/builder"
 
   project_id        = var.admin_project
-  admin_project_id  = var.admin_project
   region            = var.region
   repository_region = var.region
   repository_id     = var.service_name
-  cloudbuild_sa     = var.cloudbuild_sa
-
 
   containers = {
     agent = {

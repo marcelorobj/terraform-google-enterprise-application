@@ -27,32 +27,6 @@ variable "regions" {
 }
 
 #-----------------------------------------------------
-# Deployment Options
-#-----------------------------------------------------
-
-variable "cloudrun_enabled" {
-  description = "Enable Cloud Run deployment alongside GKE"
-  type        = bool
-  default     = false
-}
-
-variable "ui_image_enabled" {
-  description = "Enable or disable the building of the UI image"
-  type        = bool
-  default     = false
-}
-
-#-----------------------------------------------------
-# Output Configuration
-#-----------------------------------------------------
-
-variable "scripts_output" {
-  description = "Output directory for testing scripts"
-  type        = string
-  default     = "./generated"
-}
-
-#-----------------------------------------------------
 # PubSub Configuration
 #-----------------------------------------------------
 
@@ -112,52 +86,6 @@ variable "quota_contact_email" {
   default     = ""
 }
 
-#-----------------------------------------------------
-# GKE Cluster Configuration
-#-----------------------------------------------------
-
-variable "gke_standard_cluster_name" {
-  description = "Base name for GKE clusters"
-  type        = string
-  default     = "gke-risk-research"
-}
-
-variable "node_machine_type_ondemand" {
-  description = "Machine type for on-demand node pools"
-  type        = string
-  default     = "e2-standard-2"
-}
-
-variable "node_machine_type_spot" {
-  description = "Machine type for spot node pools"
-  type        = string
-  default     = "e2-standard-2"
-}
-
-variable "min_nodes_ondemand" {
-  description = "Minimum number of on-demand nodes"
-  type        = number
-  default     = 0
-}
-
-variable "max_nodes_ondemand" {
-  description = "Maximum number of on-demand nodes"
-  type        = number
-  default     = 1
-}
-
-variable "min_nodes_spot" {
-  description = "Minimum number of spot nodes"
-  type        = number
-  default     = 0
-}
-
-variable "max_nodes_spot" {
-  description = "Maximum number of spot nodes"
-  type        = number
-  default     = 1
-}
-
 # variable "scaled_control_plane" {
 #   description = "Deploy a larger initial nodepool to ensure larger control plane nodes are provisioned"
 #   type        = bool
@@ -208,32 +136,6 @@ variable "storage_locations" {
   default     = {}
 }
 
-variable "deployment_type" {
-  description = "Parallelstore Instance deployment type (SCRATCH or PERSISTENT)"
-  type        = string
-  default     = "SCRATCH"
-
-  validation {
-    condition     = contains(["SCRATCH", "PERSISTENT"], var.deployment_type)
-    error_message = "deployment_type must be either SCRATCH or PERSISTENT."
-  }
-}
-
-#-----------------------------------------------------
-# Lustre Configuration
-#-----------------------------------------------------
-
-variable "lustre_filesystem" {
-  description = "The name of the Lustre filesystem"
-  type        = string
-  default     = "lustre-fs"
-}
-
-variable "lustre_gke_support_enabled" {
-  description = "Enable GKE support for Lustre instance"
-  type        = bool
-  default     = true
-}
 
 #-----------------------------------------------------
 # Storage Options
@@ -243,58 +145,6 @@ variable "hsn_bucket" {
   description = "Enable hierarchical namespace GCS buckets"
   type        = bool
   default     = false
-}
-
-#-----------------------------------------------------
-# Network Configuration
-#-----------------------------------------------------
-
-variable "storage_ip_range" {
-  description = "IP range for Storage peering, in CIDR notation"
-  type        = string
-  default     = "172.16.0.0/16"
-}
-
-#-----------------------------------------------------
-# Artifact Registry Configuration
-#-----------------------------------------------------
-
-variable "artifact_registry_name" {
-  description = "Name of the Artifact Registry repository"
-  type        = string
-  default     = "research-images"
-}
-
-#-----------------------------------------------------
-# Security Configuration
-#-----------------------------------------------------
-
-variable "enable_workload_identity" {
-  description = "Enable Workload Identity for GKE clusters"
-  type        = bool
-  default     = true
-}
-
-#-----------------------------------------------------
-# CSI Drivers Configuration
-#-----------------------------------------------------
-
-variable "enable_csi_parallelstore" {
-  description = "Enable the Parallelstore CSI Driver"
-  type        = bool
-  default     = true
-}
-
-# variable "enable_csi_filestore" {
-#   description = "Enable the Filestore CSI Driver"
-#   type        = bool
-#   default     = false
-# }
-
-variable "enable_csi_gcs_fuse" {
-  description = "Enable the GCS Fuse CSI Driver"
-  type        = bool
-  default     = true
 }
 
 #-----------------------------------------------------
@@ -344,38 +194,6 @@ variable "region" {
   type        = string
 }
 
-variable "bucket_force_destroy" {
-  description = "When deleting a bucket, this boolean option will delete all contained objects. If false, Terraform will fail to delete buckets which contain objects."
-  type        = bool
-  default     = false
-}
-
-variable "workerpool_id" {
-  description = <<-EOT
-    Specifies the Cloud Build Worker Pool that will be utilized for triggers created in this step.
-
-    The expected format is:
-    `projects/PROJECT/locations/LOCATION/workerPools/POOL_NAME`.
-
-    If you are using worker pools from a different project, ensure that you grant the
-    `roles/cloudbuild.workerPoolUser` role on the workerpool project to the Cloud Build Service Agent and the Cloud Build Service Account of the trigger project:
-    `service-PROJECT_NUMBER@gcp-sa-cloudbuild.iam.gserviceaccount.com`, `PROJECT_NUMBER@cloudbuild.gserviceaccount.com`
-  EOT
-  type        = string
-  default     = ""
-}
-
-variable "logging_bucket" {
-  description = "Bucket to store logging."
-  type        = string
-  default     = null
-}
-
-variable "bucket_kms_key" {
-  description = "KMS Key id to be used to encrypt bucket."
-  type        = string
-  default     = null
-}
 
 variable "network_name" {
   description = "VPC Network Name"
@@ -392,11 +210,6 @@ variable "gke_cluster_names" {
   type        = list(string)
 }
 
-variable "gke_cluster_regions" {
-  description = "GKE Cluster regions to be used in configurations"
-  type        = list(string)
-}
-
 variable "parallelstore_deployment_type" {
   description = "Parallelstore Instance deployment type (SCRATCH or PERSISTENT)"
   type        = string
@@ -406,16 +219,6 @@ variable "parallelstore_deployment_type" {
     condition     = contains(["SCRATCH", "PERSISTENT"], var.parallelstore_deployment_type)
     error_message = "deployment_type must be either SCRATCH or PERSISTENT"
   }
-}
-
-variable "network_project_id" {
-  description = "VPC Network's project id"
-  type        = string
-}
-
-variable "cloudbuild_sa" {
-  description = "Admin project's cloud build service account"
-  type        = string
 }
 
 variable "cluster_project_id" {
@@ -436,4 +239,10 @@ variable "team" {
 variable "env" {
   description = "The environment to prepare (ex. development)"
   type        = string
+}
+
+variable "enable_csi_parallelstore" {
+  description = "Enable the Parallelstore CSI Driver"
+  type        = bool
+  default     = true
 }

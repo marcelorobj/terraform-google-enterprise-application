@@ -39,7 +39,7 @@ module "build_logs" {
   source  = "terraform-google-modules/cloud-storage/google//modules/simple_bucket"
   version = "~> 11.0"
 
-  name              = "cb-tf-builder-logs-${var.project_id}"
+  name              = "${var.bucket_prefix}-cb-tf-builder-logs-${var.project_id}"
   project_id        = var.project_id
   location          = var.location
   log_bucket        = var.logging_bucket
@@ -50,7 +50,7 @@ module "build_logs" {
 
   versioning = true
 
-  encryption = var.bucket_kms_key == null ? {} : {
+  encryption = var.bucket_kms_key == null ? null : {
     default_kms_key_name = var.bucket_kms_key
   }
 

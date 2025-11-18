@@ -59,7 +59,7 @@ module "delivery_artifacts" {
 
   for_each = var.env_cluster_membership_ids
 
-  name              = "artifacts-${each.key}-${data.google_project.project.number}-${var.service_name}"
+  name              = "${var.bucket_prefix}-artifacts-${each.key}-${data.google_project.project.number}-${var.service_name}"
   project_id        = var.project_id
   location          = regex(local.membership_re, each.value.cluster_membership_ids[0])[1]
   log_bucket        = var.logging_bucket
@@ -69,7 +69,7 @@ module "delivery_artifacts" {
   public_access_prevention = "enforced"
 
   versioning = true
-  encryption = var.bucket_kms_key == null ? {} : {
+  encryption = var.bucket_kms_key == null ? null : {
     default_kms_key_name = var.bucket_kms_key
   }
 

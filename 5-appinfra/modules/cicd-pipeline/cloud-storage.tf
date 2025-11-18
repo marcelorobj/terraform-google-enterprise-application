@@ -17,7 +17,7 @@ module "build_cache" {
   source  = "terraform-google-modules/cloud-storage/google//modules/simple_bucket"
   version = "~> 11.0"
 
-  name              = "build-cache-${var.service_name}-${data.google_project.project.number}"
+  name              = "${var.bucket_prefix}-build-cache-${var.service_name}-${data.google_project.project.number}"
   project_id        = var.project_id
   location          = var.region
   log_bucket        = var.logging_bucket
@@ -28,7 +28,7 @@ module "build_cache" {
   public_access_prevention = "enforced"
 
   versioning = true
-  encryption = var.bucket_kms_key == null ? {} : {
+  encryption = var.bucket_kms_key == null ? null : {
     default_kms_key_name = var.bucket_kms_key
   }
 
@@ -57,7 +57,7 @@ module "release_source_development" {
   source  = "terraform-google-modules/cloud-storage/google//modules/simple_bucket"
   version = "~> 11.0"
 
-  name              = "release-source-development-${var.service_name}-${data.google_project.project.number}"
+  name              = "${var.bucket_prefix}-release-source-development-${var.service_name}-${data.google_project.project.number}"
   project_id        = var.project_id
   location          = var.region
   log_bucket        = var.logging_bucket
@@ -67,7 +67,7 @@ module "release_source_development" {
   public_access_prevention = "enforced"
 
   versioning = true
-  encryption = var.bucket_kms_key == null ? {} : {
+  encryption = var.bucket_kms_key == null ? null : {
     default_kms_key_name = var.bucket_kms_key
   }
 

@@ -33,7 +33,7 @@ module "app" {
 
   service_name           = local.service_name
   team_name              = local.team_name
-  repo_name              = local.repo_name
+  repo_name              = var.cloudbuildv2_repository_config.repositories[local.repo_name].repository_name
   repo_branch            = local.repo_branch
   app_build_trigger_yaml = "src/${local.team_name}/cloudbuild.yaml"
 
@@ -45,6 +45,7 @@ module "app" {
   ci_build_included_files = ["src/${local.team_name}/**", "src/components/**"]
 
   buckets_force_destroy = var.buckets_force_destroy
+  bucket_prefix         = var.bucket_prefix
 
   cloudbuildv2_repository_config = var.cloudbuildv2_repository_config
 
@@ -54,7 +55,7 @@ module "app" {
   bucket_kms_key    = var.bucket_kms_key
 
   attestation_kms_key                = var.attestation_kms_key
-  attestor_id                        = contains(var.environment_names, "production") ? data.terraform_remote_state.fleetscope["production"].outputs.attestor_id : data.terraform_remote_state.fleetscope[var.environment_names[0]].outputs.attestor_id
+  attestor_id                        = var.attestation_kms_key != null ? contains(var.environment_names, "production") ? data.terraform_remote_state.fleetscope["production"].outputs.attestor_id : data.terraform_remote_state.fleetscope[var.environment_names[0]].outputs.attestor_id : null
   binary_authorization_image         = data.terraform_remote_state.bootstrap.outputs.binary_authorization_image
   binary_authorization_repository_id = data.terraform_remote_state.bootstrap.outputs.binary_authorization_repository_id
 }

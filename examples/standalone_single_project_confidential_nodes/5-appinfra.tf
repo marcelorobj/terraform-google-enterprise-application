@@ -251,7 +251,7 @@ module "cicd" {
 
   service_name           = each.value.service_name
   team_name              = each.value.team_name
-  repo_name              = each.value.team_name != each.value.service_name ? "eab-${each.value.application_name}-${each.value.team_name}-${each.value.service_name}" : "eab-${each.value.application_name}-${each.value.service_name}"
+  repo_name              = each.value.cloudbuildv2_repository_config.repositories[each.value.team_name != each.value.service_name ? "eab-${each.value.application_name}-${each.value.team_name}-${each.value.service_name}" : "eab-${each.value.application_name}-${each.value.service_name}"].repository_name
   repo_branch            = each.value.repo_branch
   app_build_trigger_yaml = "src/${each.value.team_name}/cloudbuild.yaml"
 
@@ -271,7 +271,7 @@ module "cicd" {
   logging_bucket             = var.logging_bucket
   bucket_kms_key             = var.bucket_kms_key
   attestation_kms_key        = var.attestation_kms_key
-  attestor_id                = module.fleetscope_infra.attestor_id
+  attestor_id                = var.attestation_kms_key != null ? module.fleetscope_infra.attestor_id : null
   binary_authorization_image = var.binary_authorization_image
 
   binary_authorization_repository_id = var.binary_authorization_repository_id

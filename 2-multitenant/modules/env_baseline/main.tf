@@ -89,6 +89,7 @@ module "eab_cluster_project" {
   activate_apis = [
     "anthos.googleapis.com",
     "anthosconfigmanagement.googleapis.com",
+    "anthospolicycontroller.googleapis.com",
     "binaryauthorization.googleapis.com",
     "certificatemanager.googleapis.com",
     "cloudresourcemanager.googleapis.com",
@@ -104,6 +105,7 @@ module "eab_cluster_project" {
     "multiclusterservicediscovery.googleapis.com",
     "servicenetworking.googleapis.com",
     "serviceusage.googleapis.com",
+    "sourcerepo.googleapis.com",
     "sqladmin.googleapis.com",
     "trafficdirector.googleapis.com",
   ]

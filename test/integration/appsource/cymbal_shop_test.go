@@ -134,9 +134,10 @@ func TestSourceCymbalShop(t *testing.T) {
 						return true, nil
 					}
 					latestWorkflowRunStatus := build[0].Get("status").String()
-					if latestWorkflowRunStatus == "SUCCESS" {
+					switch latestWorkflowRunStatus {
+					case "SUCCESS":
 						return false, nil
-					} else if latestWorkflowRunStatus == "FAILURE" {
+					case "FAILURE":
 						return false, errors.New("Build failed.")
 					}
 					return true, nil
@@ -176,7 +177,7 @@ func TestSourceCymbalShop(t *testing.T) {
 						return true, nil
 					} else {
 						logsCmd := fmt.Sprintf("builds log %s", rollouts[0].Get("deployingBuild").String())
-						logs := gcloud.Runf(t, logsCmd).String()
+						logs := gcloud.RunCmd(t, logsCmd)
 						t.Logf("%s build-log: %s", serviceName, logs)
 						return false, fmt.Errorf("Rollout %s.", latestRolloutState)
 					}

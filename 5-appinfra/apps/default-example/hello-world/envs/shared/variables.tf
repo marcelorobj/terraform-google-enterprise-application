@@ -26,6 +26,12 @@ variable "buckets_force_destroy" {
   default     = false
 }
 
+variable "bucket_prefix" {
+  description = "Name prefix to use for buckets created."
+  type        = string
+  default     = "bkt"
+}
+
 variable "remote_state_bucket" {
   description = "Backend bucket to load Terraform Remote State Data from previous steps."
   type        = string
@@ -117,4 +123,5 @@ variable "bucket_kms_key" {
 variable "attestation_kms_key" {
   type        = string
   description = "The KMS Key ID to be used by attestor."
+  default     = null
 }

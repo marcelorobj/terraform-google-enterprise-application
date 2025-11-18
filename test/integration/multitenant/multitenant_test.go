@@ -37,7 +37,10 @@ func TestMultitenant(t *testing.T) {
 	bootstrap := tft.NewTFBlueprintTest(t,
 		tft.WithTFDir("../../../1-bootstrap"),
 	)
-	os.Setenv("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT", bootstrap.GetJsonOutput("cb_service_accounts_emails").Get("multitenant").String())
+err := os.Setenv("GOOGLE_IMPERSONATE_SERVICE_ACCOUNT", bootstrap.GetJsonOutput("cb_service_accounts_emails").Get("multitenant").String())
+if err != nil {
+	t.Fatalf("failed to set GOOGLE_IMPERSONATE_SERVICE_ACCOUNT: %v", err)
+}
 
 	vpcsc := tft.NewTFBlueprintTest(t,
 		tft.WithTFDir("../../setup/vpcsc"),
@@ -94,20 +97,26 @@ func TestMultitenant(t *testing.T) {
 					{
 						projectId: clusterProjectID,
 						apis: []string{
-							"cloudresourcemanager.googleapis.com",
-							"compute.googleapis.com",
-							"iam.googleapis.com",
-							"serviceusage.googleapis.com",
-							"container.googleapis.com",
-							"gkehub.googleapis.com",
 							"anthos.googleapis.com",
+							"anthosconfigmanagement.googleapis.com",
+							"anthospolicycontroller.googleapis.com",
+							"binaryauthorization.googleapis.com",
+							"certificatemanager.googleapis.com",
+							"cloudresourcemanager.googleapis.com",
+							"cloudtrace.googleapis.com",
 							"compute.googleapis.com",
+							"container.googleapis.com",
+							"containeranalysis.googleapis.com",
+							"containerscanning.googleapis.com",
+							"gkehub.googleapis.com",
+							"iam.googleapis.com",
 							"mesh.googleapis.com",
 							"multiclusteringress.googleapis.com",
 							"multiclusterservicediscovery.googleapis.com",
+							"servicenetworking.googleapis.com",
+							"serviceusage.googleapis.com",
+							"sqladmin.googleapis.com",
 							"trafficdirector.googleapis.com",
-							"anthosconfigmanagement.googleapis.com",
-							"cloudtrace.googleapis.com",
 						},
 					},
 				} {

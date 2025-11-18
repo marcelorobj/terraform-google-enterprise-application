@@ -39,8 +39,8 @@ locals {
   optional_worker_pool = var.workerpool_id != "" ? { "_PRIVATE_POOL" = var.workerpool_id } : {}
 
   projects_re         = "projects/([^/]+)/"
-  worker_pool_project = regex(local.projects_re, var.workerpool_id)[0]
-  kms_project         = regex(local.projects_re, var.bucket_kms_key)[0]
+  worker_pool_project = var.workerpool_id != null ? regex(local.projects_re, var.workerpool_id)[0] : null
+  kms_project         = var.bucket_kms_key != null ? regex(local.projects_re, var.bucket_kms_key)[0] : null
 }
 
 resource "google_sourcerepo_repository" "gcp_repo" {
@@ -83,7 +83,7 @@ module "tfstate_bucket" {
   force_destroy            = var.bucket_force_destroy
   public_access_prevention = "enforced"
 
-  encryption = var.bucket_kms_key == null ? {} : {
+  encryption = var.bucket_kms_key == null ? null : {
     default_kms_key_name = var.bucket_kms_key
   }
 
@@ -113,6 +113,7 @@ module "tf_cloudbuild_workspace" {
   trigger_location      = var.trigger_location
   artifacts_bucket_name = "${var.bucket_prefix}-${var.project_id}-${local.cb_config[each.key].bucket_infix}-build"
   log_bucket_name       = "${var.bucket_prefix}-${var.project_id}-${local.cb_config[each.key].bucket_infix}-logs"
+  buckets_force_destroy = var.bucket_force_destroy
 
   create_state_bucket    = false
   state_bucket_self_link = module.tfstate_bucket.bucket.self_link

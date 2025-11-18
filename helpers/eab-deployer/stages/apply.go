@@ -16,7 +16,6 @@ package stages
 
 import (
 	"fmt"
-	"io/ioutil"
 	"maps"
 	"os"
 	"path/filepath"
@@ -32,6 +31,19 @@ import (
 )
 
 func DeployBootstrapStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, c CommonConf) error {
+	var kmsProject *string
+	if tfvars.AttestationKMSKey != nil {
+		kmsInfo, err := extractInfoWithRegex(*tfvars.AttestationKMSKey, `projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/keyRings/(?P<keyRing>[^/]+)/cryptoKeys/(?P<cryptoKey>[^/]+)`)
+		if err != nil {
+			fmt.Printf("# error extracting info for attestation KMS key. %v \n", err)
+			return err
+		}
+
+		if len(kmsInfo) > 0 {
+			auxProject := kmsInfo["project"]
+			kmsProject = &auxProject
+		}
+	}
 	bootstrapTfvars := BootstrapTfvars{
 		ProjectID:                    tfvars.ProjectID,
 		BucketPrefix:                 tfvars.BucketPrefix,
@@ -48,7 +60,7 @@ func DeployBootstrapStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, c Co
 		ServicePerimeterMode:         tfvars.ServicePerimeterMode,
 		LoggingBucket:                tfvars.LoggingBucket,
 		BucketKMSKey:                 tfvars.BucketKMSKey,
-		AttestationKMSProject:        tfvars.AttestationKMSProject,
+		AttestationKMSProject:        kmsProject,
 		OrgID:                        tfvars.OrgID,
 	}
 
@@ -59,9 +71,11 @@ func DeployBootstrapStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, c Co
 
 	terraformDir := filepath.Join(c.EABPath, BootstrapStep)
 	options := &terraform.Options{
-		TerraformDir: terraformDir,
-		Logger:       c.Logger,
-		NoColor:      true,
+		TerraformDir:       terraformDir,
+		Logger:             c.Logger,
+		NoColor:            true,
+		MaxRetries:         MaxErrorRetries,
+		TimeBetweenRetries: TimeBetweenErrorRetries,
 	}
 	// terraform deploy
 	err = applyLocal(t, options, "", c.PolicyPath, c.ValidatorProject)
@@ -118,26 +132,30 @@ func DeployBootstrapStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, c Co
 
 func DeployMultitenantStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, outputs BootstrapOutputs, c CommonConf) error {
 
+	workerPoolInfo, err := extractInfoWithRegex(tfvars.WorkerPoolID, `projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/workerPools/(?P<workerPool>[^/]+)`)
+	if err != nil {
+		fmt.Printf("# error extracting info for private workerpool. %v \n", err)
+		return err
+	}
 	multitenantTfvars := MultiTenantTfvars{
 		Envs:                         tfvars.Envs,
 		Apps:                         tfvars.Apps,
 		ServicePerimeterName:         tfvars.ServicePerimeterName,
-		ServicePerimeterMode:         tfvars.ServicePerimeterMode,
-		CBPrivateWorkerpoolProjectID: tfvars.CBPrivateWorkerpoolProjectID,
+		ServicePerimeterMode:         *tfvars.ServicePerimeterMode,
+		CBPrivateWorkerpoolProjectID: workerPoolInfo["project"],
 		AccessLevelName:              tfvars.AccessLevelName,
 		DeletionProtection:           tfvars.DeletionProtection,
 	}
-	err := utils.WriteTfvars(filepath.Join(c.EABPath, MultitenantStep, "terraform.tfvars"), multitenantTfvars)
+	err = utils.WriteTfvars(filepath.Join(c.EABPath, MultitenantStep, "terraform.tfvars"), multitenantTfvars)
 	if err != nil {
 		return err
 	}
 
-	conf := utils.GitRepo{}
-	if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-		conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["multitenant"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["multitenant"].RepositoryName), c.Logger)
-	} else {
-		conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["multitenant"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["multitenant"].RepositoryName), outputs.ProjectID, c.Logger)
-	}
+	repoConfig := tfvars.InfraCloudbuildV2RepositoryConfig
+	multitenantRepo := repoConfig.Repositories["multitenant"]
+	gitPath := filepath.Join(c.CheckoutPath, multitenantRepo.RepositoryName)
+	conf := utils.GitClone(t, repoConfig.RepoType, multitenantRepo.RepositoryName, multitenantRepo.RepositoryURL, gitPath, outputs.ProjectID, c.Logger)
+
 	stageConf := StageConf{
 		Stage:         tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["multitenant"].RepositoryName,
 		CICDProject:   outputs.ProjectID,
@@ -171,12 +189,10 @@ func DeployFleetscopeStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, out
 		return err
 	}
 
-	conf := utils.GitRepo{}
-	if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-		conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["fleetscope"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["fleetscope"].RepositoryName), c.Logger)
-	} else {
-		conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["fleetscope"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["fleetscope"].RepositoryName), outputs.ProjectID, c.Logger)
-	}
+	repoConfig := tfvars.InfraCloudbuildV2RepositoryConfig
+	fleetscopeRepo := repoConfig.Repositories["fleetscope"]
+	gitPath := filepath.Join(c.CheckoutPath, fleetscopeRepo.RepositoryName)
+	conf := utils.GitClone(t, repoConfig.RepoType, fleetscopeRepo.RepositoryName, fleetscopeRepo.RepositoryURL, gitPath, outputs.ProjectID, c.Logger)
 
 	stageConf := StageConf{
 		Stage:         tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["fleetscope"].RepositoryName,
@@ -194,6 +210,17 @@ func DeployFleetscopeStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, out
 
 func DeployAppFactoryStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, outputs BootstrapOutputs, c CommonConf) error {
 
+	var kmsProject *string
+	if tfvars.BucketKMSKey != nil {
+		kmsInfo, err := extractInfoWithRegex(*tfvars.BucketKMSKey, `projects/(?P<project>[^/]+)/locations/(?P<location>[^/]+)/keyRings/(?P<keyRing>[^/]+)/cryptoKeys/(?P<cryptoKey>[^/]+)`)
+		if err != nil {
+			fmt.Printf("# error extracting info for BUCKET KMS PROJECT. %v \n", err)
+		}
+		if len(kmsInfo) > 0 {
+			auxProject := kmsInfo["project"]
+			kmsProject = &auxProject
+		}
+	}
 	appFactory := AppFactoryTfvars{
 		RemoteStateBucket:            outputs.StateBucket,
 		CommonFolderID:               tfvars.CommonFolderID,
@@ -207,9 +234,9 @@ func DeployAppFactoryStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, out
 		TFApplyBranches:              slices.Collect(maps.Keys(tfvars.Envs)),
 		Applications:                 tfvars.Applications,
 		CloudbuildV2RepositoryConfig: tfvars.InfraCloudbuildV2RepositoryConfig,
-		KMSProjectID:                 tfvars.KMSProjectID,
+		KMSProjectID:                 kmsProject,
 		ServicePerimeterName:         tfvars.ServicePerimeterName,
-		ServicePerimeterMode:         tfvars.ServicePerimeterMode,
+		ServicePerimeterMode:         *tfvars.ServicePerimeterMode,
 		InfraProjectAPIs:             tfvars.InfraProjectAPIs,
 	}
 	err := utils.WriteTfvars(filepath.Join(c.EABPath, AppFactoryStep, "terraform.tfvars"), appFactory)
@@ -217,12 +244,10 @@ func DeployAppFactoryStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, out
 		return err
 	}
 
-	conf := utils.GitRepo{}
-	if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-		conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["applicationfactory"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["applicationfactory"].RepositoryName), c.Logger)
-	} else {
-		conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["applicationfactory"].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["applicationfactory"].RepositoryName), outputs.ProjectID, c.Logger)
-	}
+	repoConfig := tfvars.InfraCloudbuildV2RepositoryConfig
+	appFactoryRepo := repoConfig.Repositories["applicationfactory"]
+	gitPath := filepath.Join(c.CheckoutPath, appFactoryRepo.RepositoryName)
+	conf := utils.GitClone(t, repoConfig.RepoType, appFactoryRepo.RepositoryName, appFactoryRepo.RepositoryURL, gitPath, outputs.ProjectID, c.Logger)
 
 	stageConf := StageConf{
 		Stage:         tfvars.InfraCloudbuildV2RepositoryConfig.Repositories["applicationfactory"].RepositoryName,
@@ -240,19 +265,20 @@ func DeployAppFactoryStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, out
 	return deployStage(t, stageConf, s, c)
 }
 
-func DeployAppInfraStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, outputs AppFactoryOutputs, c CommonConf) error {
+func DeployAppInfraStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, bootstrapOutputs BootstrapOutputs, outputs AppFactoryOutputs, c CommonConf) error {
 	//for each environment
 
 	appInfraTfvars := AppInfraTfvars{
 		Region:                       tfvars.Region,
-		BucketsForceDestroy:          tfvars.BucketsForceDestroy,
-		RemoteStateBucket:            tfvars.RemoteStateBucket,
+		BucketsForceDestroy:          tfvars.BucketForceDestroy,
+		RemoteStateBucket:            bootstrapOutputs.StateBucket,
 		EnvironmentNames:             slices.Collect(maps.Keys(tfvars.Envs)),
 		CloudbuildV2RepositoryConfig: tfvars.AppServicesCloudbuildV2RepositoryConfig,
 		AccessLevelName:              tfvars.AccessLevelName,
 		LoggingBucket:                tfvars.LoggingBucket,
 		BucketKMSKey:                 tfvars.BucketKMSKey,
 		AttestationKMSKey:            tfvars.AttestationKMSKey,
+		BucketPrefix:                 tfvars.BucketPrefix,
 	}
 
 	var err error
@@ -276,22 +302,22 @@ func DeployAppInfraStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, outpu
 				}
 			}
 
-			conf := utils.GitRepo{}
-			if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-				conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryName), c.Logger)
-			} else {
-				conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryName), outputs.AppGroup[appGroupIndex].AppAdminProjectID, c.Logger)
-			}
+			repoConfig := tfvars.InfraCloudbuildV2RepositoryConfig
+			serviceRepo := repoConfig.Repositories[serviceName]
+			gitPath := filepath.Join(c.CheckoutPath, serviceRepo.RepositoryName)
+			conf := utils.GitClone(t, repoConfig.RepoType, serviceRepo.RepositoryName, serviceRepo.RepositoryURL, gitPath, outputs.AppGroup[appGroupIndex].AppAdminProjectID, c.Logger)
 
+			serviceAccountID := strings.Split(outputs.AppGroup[appGroupIndex].AppCloudbuildWorkspaceCloudbuildSAEmail, "/")
 			stageConf := StageConf{
 				Stage:         tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryName,
-				StageSA:       outputs.AppGroup[appGroupIndex].AppCloudbuildWorkspaceCloudbuildSAEmail,
+				StageSA:       serviceAccountID[len(serviceAccountID)-1],
 				CICDProject:   outputs.AppGroup[appGroupIndex].AppAdminProjectID,
 				Step:          AppInfraStep,
 				Repo:          tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[serviceName].RepositoryName,
 				GitConf:       conf,
 				HasLocalStep:  true,
 				LocalSteps:    []string{"shared"},
+				GroupingUnits: []string{fmt.Sprintf("apps/%s/%s/envs/", exampleName, serviceName)},
 				Envs:          envs,
 				DefaultRegion: tfvars.TriggerLocation,
 			}
@@ -311,12 +337,9 @@ func DeployAppSourceStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, outp
 	var err error
 	for _, repository := range tfvars.AppServicesCloudbuildV2RepositoryConfig.Repositories {
 
-		conf := utils.GitRepo{}
-		if tfvars.AppServicesCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-			conf = utils.CloneGit(t, repository.RepositoryURL, filepath.Join(c.CheckoutPath, outputs.ServiceRepositoryName), c.Logger)
-		} else {
-			conf = utils.CloneCSR(t, repository.RepositoryURL, filepath.Join(c.CheckoutPath, outputs.ServiceRepositoryName), outputs.ServiceRepositoryProjectID, c.Logger)
-		}
+		gitPath := filepath.Join(c.CheckoutPath, outputs.ServiceRepositoryName)
+		conf := utils.GitClone(t, tfvars.AppServicesCloudbuildV2RepositoryConfig.RepoType, repository.RepositoryName, repository.RepositoryURL, gitPath, outputs.ServiceRepositoryProjectID, c.Logger)
+
 		stageConf := StageConf{
 			Stage:         outputs.ServiceRepositoryName,
 			CICDProject:   outputs.ServiceRepositoryProjectID,
@@ -358,9 +381,11 @@ func deployStage(t testing.TB, sc StageConf, s steps.Steps, c CommonConf) error 
 	for _, bu := range groupunit {
 		for _, localStep := range sc.LocalSteps {
 			buOptions := &terraform.Options{
-				TerraformDir: filepath.Join(filepath.Join(c.CheckoutPath, sc.Repo), bu, localStep),
-				Logger:       c.Logger,
-				NoColor:      true,
+				TerraformDir:       filepath.Join(filepath.Join(c.CheckoutPath, sc.Repo), bu, localStep),
+				Logger:             c.Logger,
+				NoColor:            true,
+				MaxRetries:         MaxErrorRetries,
+				TimeBetweenRetries: TimeBetweenErrorRetries,
 			}
 
 			err := s.RunStep(fmt.Sprintf("%s.%s.apply-%s", sc.Stage, bu, localStep), func() error {
@@ -470,6 +495,7 @@ func copyStepCode(t testing.TB, conf utils.GitRepo, EABPath, checkoutPath, repo,
 	fileName := filepath.Join(gcpPath, ".gitignore")
 	content := `### https://raw.github.com/github/gitignore/90f149de451a5433aebd94d02d11b0e28843a1af/Terraform.gitignore
 # Local .terraform directories
+*.terraform*
 **/.terraform/*
 
 # .tfstate files
@@ -490,27 +516,28 @@ func copyStepCode(t testing.TB, conf utils.GitRepo, EABPath, checkoutPath, repo,
 	// file.WriteString returns the number of bytes written and an error.
 	_, err = file.WriteString(content)
 	if err != nil {
-		fmt.Printf("Error writing to file: %v\n", err)
+		return err
 	}
 	err = utils.CopyFile(filepath.Join(EABPath, "build/tf-wrapper.sh"), filepath.Join(gcpPath, "tf-wrapper.sh"))
 	if err != nil {
-		fmt.Printf("Error writing to file: %v\n", err)
-	}
-
-	fileContent, err := ioutil.ReadFile(filepath.Join(gcpPath, "tf-wrapper.sh"))
-	if err != nil {
-		return fmt.Errorf("error reading file: %w", err)
+		return err
 	}
 
 	oldValue := "^(development|nonproduction|production|shared)$"
 	newValue := fmt.Sprintf("^(%s)$", strings.Join(environmentNames, "|"))
-	// Convert content to string and perform replacement
-	modifiedContent := strings.ReplaceAll(string(fileContent), oldValue, newValue)
-
-	// Write the modified content back to the file
-	err = ioutil.WriteFile(filepath.Join(gcpPath, "tf-wrapper.sh"), []byte(modifiedContent), 0o644) // 0o644 for read/write by owner, read by others
+	err = utils.ReplaceStringInFile(filepath.Join(gcpPath, "tf-wrapper.sh"), oldValue, newValue)
 	if err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+		return err
+	}
+	s, err := os.Stat(filepath.Join(gcpPath, "tf-wrapper.sh"))
+	if err != nil {
+		return err
+	}
+	permissions := s.Mode().Perm()
+	newPermissions := permissions | 0111
+	err = os.Chmod(filepath.Join(gcpPath, "tf-wrapper.sh"), newPermissions)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -532,7 +559,7 @@ func planStage(t testing.TB, conf utils.GitRepo, project, region, repo string) e
 		return err
 	}
 
-	return gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Terraform %s plan build Failed.", repo), MaxBuildRetries)
+	return gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Terraform %s plan build Failed.", repo), MaxBuildRetries, MaxErrorRetries, TimeBetweenErrorRetries)
 }
 
 func saveBootstrapCodeOnly(t testing.TB, sc StageConf, s steps.Steps, c CommonConf) error {
@@ -599,7 +626,7 @@ func deployEnvApp(t testing.TB, conf utils.GitRepo, project, region, repo, servi
 		return err
 	}
 
-	err = gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Build %s env %s build Failed.", repo, service), MaxBuildRetries)
+	err = gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Build %s env %s build Failed.", repo, service), MaxBuildRetries, MaxErrorRetries, TimeBetweenErrorRetries)
 	if err != nil {
 		return err
 	}
@@ -623,7 +650,7 @@ func applyEnv(t testing.TB, conf utils.GitRepo, project, region, repo, environme
 		return err
 	}
 
-	return gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Terraform %s apply %s build Failed.", repo, environment), MaxBuildRetries)
+	return gcp.NewGCP().WaitBuildSuccess(t, project, region, repo, commitSha, fmt.Sprintf("Terraform %s apply %s build Failed.", repo, environment), MaxBuildRetries, MaxErrorRetries, TimeBetweenErrorRetries)
 }
 
 func applyLocal(t testing.TB, options *terraform.Options, serviceAccount, policyPath, validatorProjectId string) error {

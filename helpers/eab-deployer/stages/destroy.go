@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/mitchellh/go-testing-interface"
@@ -29,10 +28,6 @@ import (
 	"github.com/GoogleCloudPlatform/terraform-google-enterprise-application/helpers/eab-deployer/steps"
 	"github.com/GoogleCloudPlatform/terraform-google-enterprise-application/helpers/eab-deployer/utils"
 	"github.com/GoogleCloudPlatform/terraform-google-enterprise-application/test/integration/testutils"
-)
-
-const (
-	MaxBuildRetries = 60
 )
 
 func DestroyBootstrapStage(t testing.TB, s steps.Steps, tfvars GlobalTFVars, c CommonConf) error {
@@ -58,9 +53,11 @@ func forceBackendMigration(t testing.TB, tfDir string, c CommonConf) error {
 	exist, _ := utils.FileExists(backendF)
 
 	options := &terraform.Options{
-		TerraformDir: tfDir,
-		Logger:       c.Logger,
-		NoColor:      true,
+		TerraformDir:       tfDir,
+		Logger:             c.Logger,
+		NoColor:            true,
+		MaxRetries:         MaxErrorRetries,
+		TimeBetweenRetries: TimeBetweenErrorRetries,
 	}
 	if exist {
 		_, err := terraform.InitE(t, options)
@@ -162,16 +159,13 @@ func destroyStage(t testing.TB, sc StageConf, s steps.Steps, tfvars GlobalTFVars
 					Logger:                   c.Logger,
 					NoColor:                  true,
 					RetryableTerraformErrors: testutils.RetryableTransientErrors,
-					MaxRetries:               2,
-					TimeBetweenRetries:       2 * time.Minute,
+					MaxRetries:               MaxErrorRetries,
+					TimeBetweenRetries:       TimeBetweenErrorRetries,
 				}
-				conf := utils.GitRepo{}
 
-				if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-					conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName), c.Logger)
-				} else {
-					conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName), sc.CICDProject, c.Logger)
-				}
+				gitPath := filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName)
+				conf = utils.GitClone(t, tfvars.InfraCloudbuildV2RepositoryConfig.RepoType, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, gitPath, sc.CICDProject, c.Logger)
+
 				branch := e
 				if branch == "shared" {
 					branch = "production"
@@ -202,15 +196,14 @@ func destroyStage(t testing.TB, sc StageConf, s steps.Steps, tfvars GlobalTFVars
 				Logger:                   c.Logger,
 				NoColor:                  true,
 				RetryableTerraformErrors: testutils.RetryableTransientErrors,
-				MaxRetries:               2,
-				TimeBetweenRetries:       2 * time.Minute,
+				MaxRetries:               MaxErrorRetries,
+				TimeBetweenRetries:       TimeBetweenErrorRetries,
 			}
 			t.Log("Clonning repo")
-			if tfvars.InfraCloudbuildV2RepositoryConfig.RepoType != "CSR" {
-				conf = utils.CloneGit(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName), c.Logger)
-			} else {
-				conf = utils.CloneCSR(t, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName), sc.CICDProject, c.Logger)
-			}
+
+			gitPath := filepath.Join(c.CheckoutPath, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName)
+			conf := utils.GitClone(t, tfvars.InfraCloudbuildV2RepositoryConfig.RepoType, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryName, tfvars.InfraCloudbuildV2RepositoryConfig.Repositories[stageName].RepositoryURL, gitPath, sc.CICDProject, c.Logger)
+
 			err := conf.CheckoutBranch("production")
 			if err != nil {
 				return err
@@ -229,8 +222,8 @@ func destroyStage(t testing.TB, sc StageConf, s steps.Steps, tfvars GlobalTFVars
 				Logger:                   c.Logger,
 				NoColor:                  true,
 				RetryableTerraformErrors: testutils.RetryableTransientErrors,
-				MaxRetries:               2,
-				TimeBetweenRetries:       2 * time.Minute,
+				MaxRetries:               MaxErrorRetries,
+				TimeBetweenRetries:       TimeBetweenErrorRetries,
 			}
 			err := destroyEnv(t, options, sc.StageSA)
 			if err != nil {
